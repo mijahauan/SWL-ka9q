@@ -12,6 +12,7 @@ A web-based interface for monitoring shortwave broadcast stations with live audi
 - Displays 7300+ broadcast schedules from EiBi database
 - Monitors 1400+ unique frequencies across HF bands
 - Updates every 60 seconds to reflect schedule changes
+- Auto-downloads latest EiBi schedule on first run if missing
 
 🎧 **Live Audio Streaming**
 - One-click toggle to listen to any active station
@@ -105,6 +106,7 @@ A web-based interface for monitoring shortwave broadcast stations with live audi
    - `bc-time.txt` contains 7337 EiBi broadcast schedules
    - `bc-freq.txt` contains 1482 frequency entries
    - Files are ready to use, or customize with your own schedules
+   - **Auto-download:** If `bc-time.txt` is missing, the server automatically downloads the latest EiBi schedule on first run
 
 5. **Configure radiod hostname (REQUIRED):**
    

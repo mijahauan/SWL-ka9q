@@ -14,6 +14,7 @@ import dgram from 'dgram';
 import { EventEmitter } from 'events';
 import { WebSocketServer } from 'ws';
 import { exec } from 'child_process';
+import https from 'https';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -597,6 +598,99 @@ function getActiveStations() {
 }
 
 /**
+ * Determine current EiBi schedule season (A or B)
+ */
+function getCurrentEiBiSeason() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth(); // 0-11
+  
+  // EiBi seasons:
+  // A-season (Spring/Summer): Published late March, valid ~April-October
+  // B-season (Fall/Winter): Published late October, valid ~November-March
+  
+  // If Jan-March or Nov-Dec, use B-season
+  // If April-October, use A-season
+  if (month >= 3 && month <= 9) {
+    // April-October: Use A-season
+    return `sked-a${year.toString().slice(-2)}.txt`;
+  } else {
+    // November-March: Use B-season
+    // If Jan-March, use previous year's B-season
+    const scheduleYear = month <= 2 ? year - 1 : year;
+    return `sked-b${scheduleYear.toString().slice(-2)}.txt`;
+  }
+}
+
+/**
+ * Download EiBi schedule if bc-time.txt is missing
+ */
+async function downloadScheduleIfMissing() {
+  if (fs.existsSync(TIME_SCHEDULE_FILE)) {
+    return false; // Schedule exists, no download needed
+  }
+  
+  console.log('⚠️  No broadcast schedule found (bc-time.txt missing)');
+  console.log('📥 Attempting to download latest EiBi schedule...');
+  
+  const scheduleFile = getCurrentEiBiSeason();
+  const url = `https://www.eibispace.de/dx/${scheduleFile}`;
+  
+  console.log(`   Downloading: ${scheduleFile}`);
+  console.log(`   From: ${url}`);
+  
+  return new Promise((resolve) => {
+    https.get(url, (response) => {
+      if (response.statusCode !== 200) {
+        console.error(`❌ Download failed: HTTP ${response.statusCode}`);
+        console.log('   Please manually download a schedule:');
+        console.log('   ./update-schedule.sh');
+        resolve(false);
+        return;
+      }
+      
+      const fileStream = fs.createWriteStream(TIME_SCHEDULE_FILE);
+      response.pipe(fileStream);
+      
+      fileStream.on('finish', () => {
+        fileStream.close();
+        console.log(`✅ Downloaded ${scheduleFile} successfully!`);
+        console.log(`   Saved to: bc-time.txt`);
+        
+        // Verify it's a valid EiBi file
+        try {
+          const content = fs.readFileSync(TIME_SCHEDULE_FILE, 'utf-8');
+          if (!content.includes('Time(UTC)')) {
+            console.warn('⚠️  Downloaded file may not be a valid EiBi schedule');
+          } else {
+            const entryCount = (content.match(/^\d{4}\s+\d{4}/gm) || []).length;
+            console.log(`   Entries: ~${entryCount} broadcasts`);
+          }
+        } catch (err) {
+          console.error('⚠️  Could not verify downloaded schedule:', err.message);
+        }
+        
+        resolve(true);
+      });
+      
+      fileStream.on('error', (err) => {
+        console.error('❌ Error saving schedule:', err.message);
+        fs.unlink(TIME_SCHEDULE_FILE, () => {});
+        console.log('   Please manually download a schedule:');
+        console.log('   ./update-schedule.sh');
+        resolve(false);
+      });
+      
+    }).on('error', (err) => {
+      console.error('❌ Download error:', err.message);
+      console.log('   Please manually download a schedule:');
+      console.log('   ./update-schedule.sh');
+      resolve(false);
+    });
+  });
+}
+
+/**
  * Check for new schedule file and update if present
  */
 function checkAndUpdateSchedule() {
@@ -628,8 +722,11 @@ function checkAndUpdateSchedule() {
 /**
  * Load and reload schedules
  */
-function loadSchedules() {
+async function loadSchedules() {
   console.log('📡 Loading broadcast schedules...');
+  
+  // Download schedule if missing
+  await downloadScheduleIfMissing();
   
   // Check for new schedule file
   const updated = checkAndUpdateSchedule();
@@ -850,14 +947,14 @@ except Exception as e:
 });
 
 // Reload schedules
-app.post('/api/reload', (req, res) => {
-  loadSchedules();
+app.post('/api/reload', async (req, res) => {
+  await loadSchedules();
   res.json({ success: true, message: 'Schedules reloaded' });
 });
 
 // Start server
-function startServer() {
-  loadSchedules();
+async function startServer() {
+  await loadSchedules();
   
   const server = app.listen(PORT, () => {
     console.log(`🚀 Broadcast Station Monitor running on http://localhost:${PORT}/`);

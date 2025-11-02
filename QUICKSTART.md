@@ -82,6 +82,8 @@ pnpm start
 # or: npm start
 ```
 
+**Note:** If `bc-time.txt` is missing, the server will automatically download the latest EiBi broadcast schedule on first run.
+
 Open your browser to: **http://localhost:3100**
 
 ## What You'll See
