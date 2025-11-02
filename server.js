@@ -341,11 +341,54 @@ except Exception as e:
     });
   }
   
-  stopAudioStream(ssrc) {
+  async stopAudioStream(ssrc) {
     const stream = this.activeStreams.get(ssrc);
     if (stream) {
       stream.active = false;
       this.activeStreams.delete(ssrc);
+      
+      // Delete channel from radiod by setting frequency to 0 Hz
+      try {
+        const scriptPath = path.join(__dirname, '.ka9q-stream-stop.py');
+        const pythonScript = `import sys
+import json
+try:
+    from ka9q import RadiodControl
+    
+    control = RadiodControl('${RADIOD_HOSTNAME}')
+    
+    # Set frequency to 0 Hz to delete the channel
+    control.set_frequency(${ssrc}, 0)
+    
+    print(json.dumps({
+        'success': True,
+        'ssrc': ${ssrc}
+    }))
+except Exception as e:
+    print(json.dumps({
+        'success': False,
+        'error': str(e)
+    }), file=sys.stderr)
+    sys.exit(1)
+`;
+        
+        fs.writeFileSync(scriptPath, pythonScript);
+        
+        exec(`${PYTHON_CMD} ${scriptPath}`, (error, stdout, stderr) => {
+          // Clean up temp file
+          try {
+            fs.unlinkSync(scriptPath);
+          } catch (err) {
+            // Ignore cleanup errors
+          }
+          
+          if (error) {
+            console.error(`❌ Failed to delete channel ${ssrc}:`, error.message);
+          }
+        });
+      } catch (err) {
+        console.error(`❌ Error deleting channel ${ssrc}:`, err.message);
+      }
     }
   }
 

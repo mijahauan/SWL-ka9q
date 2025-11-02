@@ -263,6 +263,11 @@ When you click "Listen Live":
 6. Multiple stations can be played simultaneously
 7. Click **⏹️ Stop Listening** to end the stream
 
+**Channel Cleanup:**
+- When stopping a stream, the server deletes the channel from radiod by setting its frequency to 0 Hz
+- This prevents accumulation of unused channels on the radiod server
+- Channels are automatically removed on radiod's next polling cycle
+
 ## API Endpoints
 
 ### Station Data
