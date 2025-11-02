@@ -386,6 +386,7 @@ function createFrequencyCard(freq) {
                 >
                     ${isListening ? '⏹️ Stop Listening' : '▶️ Listen Live'}
                 </button>
+                ${isListening ? `<button class="btn-tune" onclick="openTuningPanel(${freq.frequency}, ${JSON.stringify(freq).replace(/"/g, '&quot;')})">🎛️ Tune</button>` : ''}
             </div>
         </div>
     `;
@@ -451,6 +452,7 @@ function createStationCard(station) {
                 >
                     ${isListening ? '⏹️ Stop Listening' : '▶️ Listen Live'}
                 </button>
+                ${isListening ? `<button class="btn-tune" onclick="openTuningPanel(${station.frequency}, ${JSON.stringify(station).replace(/"/g, '&quot;')})">🎛️ Tune</button>` : ''}
             </div>
         </div>
     `;
@@ -599,6 +601,184 @@ function showError(message) {
             <strong>⚠️ Error:</strong> ${message}
         </div>
     `;
+}
+
+// ====================
+// Tuning Panel Functions
+// ====================
+
+let currentTuningSSRC = null;
+let currentTuningStation = null;
+
+/**
+ * Open tuning panel for a specific SSRC
+ */
+function openTuningPanel(ssrc, station) {
+    currentTuningSSRC = ssrc;
+    currentTuningStation = station;
+    
+    const panel = document.getElementById('tuning-panel');
+    const stationInfo = document.getElementById('tuning-station-info');
+    
+    stationInfo.textContent = `${station.station} - ${(station.frequency / 1000).toFixed(1)} kHz`;
+    panel.style.display = 'block';
+    
+    // Reset to defaults
+    document.getElementById('agc-enable').checked = true;
+    document.getElementById('manual-gain').value = 0;
+    document.getElementById('manual-gain-value').textContent = '0';
+    document.getElementById('filter-low').value = -5000;
+    document.getElementById('filter-high').value = 5000;
+    document.getElementById('shift-freq').value = 0;
+    document.getElementById('output-level').value = 0.5;
+    document.getElementById('output-level-value').textContent = '0.50';
+    
+    updateAGC();
+}
+
+/**
+ * Close tuning panel
+ */
+function closeTuningPanel() {
+    document.getElementById('tuning-panel').style.display = 'none';
+    currentTuningSSRC = null;
+    currentTuningStation = null;
+}
+
+/**
+ * Update AGC settings
+ */
+async function updateAGC() {
+    if (!currentTuningSSRC) return;
+    
+    const enabled = document.getElementById('agc-enable').checked;
+    const hangtime = parseFloat(document.getElementById('agc-hangtime').value);
+    const headroom = parseFloat(document.getElementById('agc-headroom').value);
+    
+    // Show/hide AGC parameters and manual gain based on AGC state
+    document.getElementById('agc-params').style.display = enabled ? 'block' : 'none';
+    document.getElementById('agc-headroom-ctrl').style.display = enabled ? 'block' : 'none';
+    document.getElementById('manual-gain-section').style.display = enabled ? 'none' : 'block';
+    
+    try {
+        const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/agc`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                enable: enabled,
+                hangtime: hangtime,
+                headroom: headroom
+            })
+        });
+        
+        if (!response.ok) {
+            console.error('Failed to update AGC');
+        }
+    } catch (error) {
+        console.error('Error updating AGC:', error);
+    }
+}
+
+/**
+ * Update AGC parameter value display
+ */
+function updateAGCValue(param, value) {
+    document.getElementById(`agc-${param}-value`).textContent = value;
+    updateAGC();
+}
+
+/**
+ * Update manual gain
+ */
+async function updateGain(value) {
+    if (!currentTuningSSRC) return;
+    
+    document.getElementById('manual-gain-value').textContent = value;
+    
+    try {
+        const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/gain`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ gain_db: parseFloat(value) })
+        });
+        
+        if (!response.ok) {
+            console.error('Failed to update gain');
+        }
+    } catch (error) {
+        console.error('Error updating gain:', error);
+    }
+}
+
+/**
+ * Update filter settings
+ */
+async function updateFilter() {
+    if (!currentTuningSSRC) return;
+    
+    const lowEdge = parseFloat(document.getElementById('filter-low').value);
+    const highEdge = parseFloat(document.getElementById('filter-high').value);
+    
+    try {
+        const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/filter`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                low_edge: lowEdge,
+                high_edge: highEdge
+            })
+        });
+        
+        if (!response.ok) {
+            console.error('Failed to update filter');
+        }
+    } catch (error) {
+        console.error('Error updating filter:', error);
+    }
+}
+
+/**
+ * Update frequency shift
+ */
+async function updateShift(value) {
+    if (!currentTuningSSRC) return;
+    
+    try {
+        const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/shift`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ shift_hz: parseFloat(value) })
+        });
+        
+        if (!response.ok) {
+            console.error('Failed to update shift');
+        }
+    } catch (error) {
+        console.error('Error updating shift:', error);
+    }
+}
+
+/**
+ * Update output level
+ */
+async function updateOutputLevel(value) {
+    if (!currentTuningSSRC) return;
+    
+    document.getElementById('output-level-value').textContent = parseFloat(value).toFixed(2);
+    
+    try {
+        const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/output-level`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ level: parseFloat(value) })
+        });
+        
+        if (!response.ok) {
+            console.error('Failed to update output level');
+        }
+    } catch (error) {
+        console.error('Error updating output level:', error);
+    }
 }
 
 // Initialize when DOM is ready

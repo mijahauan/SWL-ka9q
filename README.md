@@ -21,6 +21,14 @@ A web-based interface for monitoring shortwave broadcast stations with live audi
 - Web Audio API for seamless browser-based playback at 12 kHz mono
 - Supports multiple simultaneous streams
 
+🎛️ **Advanced Tuning Controls**
+- Real-time AGC (Automatic Gain Control) adjustment
+- Manual gain control when AGC is disabled
+- Filter bandwidth adjustment (low/high edge)
+- Frequency shift for fine-tuning (useful for CW/SSB)
+- Output level control
+- Per-station tuning while streaming
+
 📡 **Advanced Filtering**
 - Filter by on-air status
 - Search by station name, frequency, language, or target area
@@ -268,6 +276,15 @@ When you click "Listen Live":
 - This prevents accumulation of unused channels on the radiod server
 - Channels are automatically removed on radiod's next polling cycle
 
+**Real-Time Tuning:**
+- Click **🎛️ Tune** button on any playing station to open the tuning panel
+- Adjust AGC settings: enable/disable, hangtime, headroom
+- Control manual gain when AGC is off (linear modes only)
+- Modify filter bandwidth (low/high edge in Hz)
+- Apply frequency shift for fine-tuning (CW beat note, SSB clarity)
+- Adjust output level/volume
+- Changes apply immediately to the active stream
+
 ## API Endpoints
 
 ### Station Data
@@ -281,6 +298,19 @@ When you click "Listen Live":
 - `GET /api/audio/stream/:frequency` - Start audio stream for frequency (kHz)
 - `DELETE /api/audio/stream/:ssrc` - Stop audio stream
 - `GET /api/audio/health` - Check audio proxy status
+
+### Tuning Controls
+
+- `POST /api/audio/tune/:ssrc/agc` - Adjust AGC settings
+  - Body: `{ enable: boolean, hangtime: float, headroom: float }`
+- `POST /api/audio/tune/:ssrc/gain` - Set manual gain
+  - Body: `{ gain_db: float }`
+- `POST /api/audio/tune/:ssrc/filter` - Adjust filter bandwidth
+  - Body: `{ low_edge: float, high_edge: float }`
+- `POST /api/audio/tune/:ssrc/shift` - Set frequency shift
+  - Body: `{ shift_hz: float }`
+- `POST /api/audio/tune/:ssrc/output-level` - Set output level
+  - Body: `{ level: float }`
 
 ### Management
 

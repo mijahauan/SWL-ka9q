@@ -75,6 +75,95 @@
         </div>
     </div>
 
+    <!-- Tuning Panel -->
+    <div id="tuning-panel" class="tuning-panel" style="display: none;">
+        <div class="tuning-header">
+            <h3>🎛️ Tuning Controls</h3>
+            <span id="tuning-station-info" class="tuning-station-info"></span>
+            <button class="tuning-close" onclick="closeTuningPanel()">×</button>
+        </div>
+        
+        <div class="tuning-content">
+            <!-- AGC Controls -->
+            <div class="tuning-section">
+                <h4>AGC (Automatic Gain Control)</h4>
+                <div class="tuning-control">
+                    <label>
+                        <input type="checkbox" id="agc-enable" onchange="updateAGC()">
+                        Enable AGC
+                    </label>
+                </div>
+                <div class="tuning-control" id="agc-params" style="display: none;">
+                    <label>
+                        Hangtime (seconds):
+                        <input type="range" id="agc-hangtime" min="0" max="5" step="0.1" value="1.0" oninput="updateAGCValue('hangtime', this.value)">
+                        <span id="agc-hangtime-value">1.0</span>
+                    </label>
+                </div>
+                <div class="tuning-control" id="agc-headroom-ctrl" style="display: none;">
+                    <label>
+                        Headroom (dB):
+                        <input type="range" id="agc-headroom" min="0" max="20" step="1" value="10" oninput="updateAGCValue('headroom', this.value)">
+                        <span id="agc-headroom-value">10</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Manual Gain Control -->
+            <div class="tuning-section" id="manual-gain-section">
+                <h4>Manual Gain</h4>
+                <div class="tuning-control">
+                    <label>
+                        Gain (dB):
+                        <input type="range" id="manual-gain" min="-20" max="40" step="1" value="0" oninput="updateGain(this.value)">
+                        <span id="manual-gain-value">0</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Filter Controls -->
+            <div class="tuning-section">
+                <h4>Filter</h4>
+                <div class="tuning-control">
+                    <label>
+                        Low Edge (Hz):
+                        <input type="number" id="filter-low" value="-5000" step="100" onchange="updateFilter()">
+                    </label>
+                </div>
+                <div class="tuning-control">
+                    <label>
+                        High Edge (Hz):
+                        <input type="number" id="filter-high" value="5000" step="100" onchange="updateFilter()">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Shift Frequency -->
+            <div class="tuning-section">
+                <h4>Frequency Shift</h4>
+                <div class="tuning-control">
+                    <label>
+                        Shift (Hz):
+                        <input type="number" id="shift-freq" value="0" step="10" onchange="updateShift(this.value)">
+                    </label>
+                    <small>Fine-tune frequency (useful for CW/SSB)</small>
+                </div>
+            </div>
+
+            <!-- Output Level -->
+            <div class="tuning-section">
+                <h4>Output Level</h4>
+                <div class="tuning-control">
+                    <label>
+                        Volume:
+                        <input type="range" id="output-level" min="0" max="1" step="0.05" value="0.5" oninput="updateOutputLevel(this.value)">
+                        <span id="output-level-value">0.50</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Opus decoding done server-side, browser receives raw PCM -->
     <script src="app.js"></script>
 </body>

@@ -12,6 +12,7 @@ venv/
 __pycache__/
 .ka9q-stream.py
 .ka9q-stream-stop.py
+.ka9q-tune.py
 
 # Schedule updates
 new_schedule.txt

@@ -392,6 +392,88 @@ except Exception as e:
     }
   }
 
+  async setAGC(ssrc, enable, hangtime, headroom) {
+    return this.executeTuningCommand(ssrc, `
+control.set_agc(${ssrc}, ${enable}, hangtime=${hangtime}, headroom=${headroom})
+    `);
+  }
+
+  async setGain(ssrc, gain_db) {
+    return this.executeTuningCommand(ssrc, `
+control.set_gain(${ssrc}, ${gain_db})
+    `);
+  }
+
+  async setFilter(ssrc, low_edge, high_edge) {
+    return this.executeTuningCommand(ssrc, `
+control.set_filter(${ssrc}, low_edge=${low_edge}, high_edge=${high_edge})
+    `);
+  }
+
+  async setShift(ssrc, shift_hz) {
+    return this.executeTuningCommand(ssrc, `
+control.set_shift_frequency(${ssrc}, ${shift_hz})
+    `);
+  }
+
+  async setOutputLevel(ssrc, level) {
+    return this.executeTuningCommand(ssrc, `
+control.set_output_level(${ssrc}, ${level})
+    `);
+  }
+
+  async executeTuningCommand(ssrc, command) {
+    return new Promise((resolve, reject) => {
+      const scriptPath = path.join(__dirname, '.ka9q-tune.py');
+      const pythonScript = `import sys
+import json
+try:
+    from ka9q import RadiodControl
+    
+    control = RadiodControl('${RADIOD_HOSTNAME}')
+    ${command}
+    
+    print(json.dumps({
+        'success': True,
+        'ssrc': ${ssrc}
+    }))
+except Exception as e:
+    print(json.dumps({
+        'success': False,
+        'error': str(e)
+    }), file=sys.stderr)
+    sys.exit(1)
+`;
+      
+      fs.writeFileSync(scriptPath, pythonScript);
+      
+      exec(`${PYTHON_CMD} ${scriptPath}`, (error, stdout, stderr) => {
+        // Clean up temp file
+        try {
+          fs.unlinkSync(scriptPath);
+        } catch (err) {
+          // Ignore cleanup errors
+        }
+        
+        if (error) {
+          reject(new Error(`Tuning command failed: ${error.message}`));
+          return;
+        }
+        
+        try {
+          const result = JSON.parse(stdout.trim());
+          if (result.success) {
+            resolve(result);
+          } else {
+            reject(new Error(result.error || 'Unknown error'));
+          }
+        } catch (parseError) {
+          reject(new Error(`Failed to parse response: ${parseError.message}`));
+        }
+      });
+    });
+  }
+
   shutdown() {
     console.log('🛑 Shutting down ka9q-radio proxy...');
     
@@ -885,6 +967,67 @@ app.delete('/api/audio/stream/:ssrc', (req, res) => {
   const ssrc = parseInt(req.params.ssrc);
   radioProxy.stopAudioStream(ssrc);
   res.json({ success: true, message: 'Stream stopped' });
+});
+
+// Tuning endpoints
+app.post('/api/audio/tune/:ssrc/agc', async (req, res) => {
+  try {
+    const ssrc = parseInt(req.params.ssrc);
+    const { enable, hangtime, headroom } = req.body;
+    
+    await radioProxy.setAGC(ssrc, enable, hangtime, headroom);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/audio/tune/:ssrc/gain', async (req, res) => {
+  try {
+    const ssrc = parseInt(req.params.ssrc);
+    const { gain_db } = req.body;
+    
+    await radioProxy.setGain(ssrc, gain_db);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/audio/tune/:ssrc/filter', async (req, res) => {
+  try {
+    const ssrc = parseInt(req.params.ssrc);
+    const { low_edge, high_edge } = req.body;
+    
+    await radioProxy.setFilter(ssrc, low_edge, high_edge);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/audio/tune/:ssrc/shift', async (req, res) => {
+  try {
+    const ssrc = parseInt(req.params.ssrc);
+    const { shift_hz } = req.body;
+    
+    await radioProxy.setShift(ssrc, shift_hz);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/audio/tune/:ssrc/output-level', async (req, res) => {
+  try {
+    const ssrc = parseInt(req.params.ssrc);
+    const { level } = req.body;
+    
+    await radioProxy.setOutputLevel(ssrc, level);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // Audio proxy health check
