@@ -20,7 +20,18 @@ echo ""
 echo "🔍 Verifying installation..."
 ./venv/bin/python3 -c "from ka9q import RadiodControl; print('✅ ka9q-python installed successfully')" && \
 echo "" && \
-echo "🎉 Setup complete!" && \
+echo "🎉 Python setup complete!" && \
 echo "" && \
-echo "You can now start the server with: npm start" || \
+echo "Next steps:" && \
+echo "  1. Install Node.js dependencies:" && \
+echo "     pnpm install" && \
+echo "     (or: npm install)" && \
+echo "" && \
+echo "  2. Configure radiod hostname in server.js (line 30)" && \
+echo "     - Check /etc/radio/radiod.conf for the 'status' entry" && \
+echo "     - Set RADIOD_HOSTNAME to match that hostname" && \
+echo "" && \
+echo "  3. Start the server:" && \
+echo "     pnpm start" && \
+echo "     (or: npm start)" || \
 echo "❌ Installation verification failed"

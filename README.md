@@ -101,6 +101,8 @@ A web-based interface for monitoring shortwave broadcast stations with live audi
    pnpm install
    # or: npm install
    ```
+   
+   **Note for existing installations:** If updating from an earlier version, run `pnpm install` again to sync dependencies with the updated `package.json` (Opus libraries were removed).
 
 4. **Broadcast schedules included:**
    - `bc-time.txt` contains 7337 EiBi broadcast schedules
