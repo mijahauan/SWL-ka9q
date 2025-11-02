@@ -635,15 +635,7 @@ body {
     margin-left: 8px;
 }
 
-/* Show tuning button in station card when audio is playing */
-.station-card.audio-playing {
-    border: 2px solid #4CAF50;
-}
-
-.station-card.audio-playing .btn-tune {
-    display: inline-block;
-}
-
+/* Tuning button styling */
 .btn-tune {
     background: #2a5298;
     color: white;
@@ -653,7 +645,7 @@ body {
     cursor: pointer;
     font-size: 13px;
     margin-left: 10px;
-    display: none;
+    display: inline-block;
 }
 
 .btn-tune:hover {
