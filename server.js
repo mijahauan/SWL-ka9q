@@ -393,8 +393,9 @@ except Exception as e:
   }
 
   async setAGC(ssrc, enable, hangtime, headroom) {
+    const enablePython = enable ? 'True' : 'False';
     return this.executeTuningCommand(ssrc, `
-control.set_agc(${ssrc}, ${enable}, hangtime=${hangtime}, headroom=${headroom})
+control.set_agc(${ssrc}, ${enablePython}, hangtime=${hangtime}, headroom=${headroom})
     `);
   }
 
@@ -438,9 +439,11 @@ try:
         'ssrc': ${ssrc}
     }))
 except Exception as e:
+    import traceback
     print(json.dumps({
         'success': False,
-        'error': str(e)
+        'error': str(e),
+        'traceback': traceback.format_exc()
     }), file=sys.stderr)
     sys.exit(1)
 `;
@@ -456,18 +459,37 @@ except Exception as e:
         }
         
         if (error) {
+          console.error(`❌ Tuning command failed for SSRC ${ssrc}:`, error.message);
+          if (stderr) console.error('Python stderr:', stderr);
           reject(new Error(`Tuning command failed: ${error.message}`));
           return;
+        }
+        
+        if (stderr) {
+          try {
+            const errorData = JSON.parse(stderr.trim());
+            console.error(`❌ Python error for SSRC ${ssrc}:`, errorData.error);
+            if (errorData.traceback) console.error('Traceback:', errorData.traceback);
+            reject(new Error(errorData.error || 'Unknown error'));
+            return;
+          } catch (e) {
+            // stderr is not JSON, log it anyway
+            console.error('Python stderr:', stderr);
+          }
         }
         
         try {
           const result = JSON.parse(stdout.trim());
           if (result.success) {
+            console.log(`✅ Tuning command succeeded for SSRC ${ssrc}`);
             resolve(result);
           } else {
+            console.error(`❌ Tuning failed for SSRC ${ssrc}:`, result.error);
             reject(new Error(result.error || 'Unknown error'));
           }
         } catch (parseError) {
+          console.error(`❌ Failed to parse Python output for SSRC ${ssrc}:`, parseError.message);
+          console.error('stdout:', stdout);
           reject(new Error(`Failed to parse response: ${parseError.message}`));
         }
       });

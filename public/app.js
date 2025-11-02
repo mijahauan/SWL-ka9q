@@ -655,6 +655,8 @@ async function updateAGC() {
     const hangtime = parseFloat(document.getElementById('agc-hangtime').value);
     const headroom = parseFloat(document.getElementById('agc-headroom').value);
     
+    console.log(`🎛️ Updating AGC for SSRC ${currentTuningSSRC}: enable=${enabled}, hangtime=${hangtime}, headroom=${headroom}`);
+    
     // Show/hide AGC parameters and manual gain based on AGC state
     document.getElementById('agc-params').style.display = enabled ? 'block' : 'none';
     document.getElementById('agc-headroom-ctrl').style.display = enabled ? 'block' : 'none';
@@ -671,11 +673,14 @@ async function updateAGC() {
             })
         });
         
+        const data = await response.json();
         if (!response.ok) {
-            console.error('Failed to update AGC');
+            console.error('❌ Failed to update AGC:', data);
+        } else {
+            console.log('✅ AGC updated successfully');
         }
     } catch (error) {
-        console.error('Error updating AGC:', error);
+        console.error('❌ Error updating AGC:', error);
     }
 }
 
@@ -694,6 +699,7 @@ async function updateGain(value) {
     if (!currentTuningSSRC) return;
     
     document.getElementById('manual-gain-value').textContent = value;
+    console.log(`🎛️ Updating gain for SSRC ${currentTuningSSRC}: ${value} dB`);
     
     try {
         const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/gain`, {
@@ -702,11 +708,14 @@ async function updateGain(value) {
             body: JSON.stringify({ gain_db: parseFloat(value) })
         });
         
+        const data = await response.json();
         if (!response.ok) {
-            console.error('Failed to update gain');
+            console.error('❌ Failed to update gain:', data);
+        } else {
+            console.log('✅ Gain updated successfully');
         }
     } catch (error) {
-        console.error('Error updating gain:', error);
+        console.error('❌ Error updating gain:', error);
     }
 }
 
@@ -719,6 +728,8 @@ async function updateFilter() {
     const lowEdge = parseFloat(document.getElementById('filter-low').value);
     const highEdge = parseFloat(document.getElementById('filter-high').value);
     
+    console.log(`🎛️ Updating filter for SSRC ${currentTuningSSRC}: low=${lowEdge} Hz, high=${highEdge} Hz`);
+    
     try {
         const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/filter`, {
             method: 'POST',
@@ -729,11 +740,14 @@ async function updateFilter() {
             })
         });
         
+        const data = await response.json();
         if (!response.ok) {
-            console.error('Failed to update filter');
+            console.error('❌ Failed to update filter:', data);
+        } else {
+            console.log('✅ Filter updated successfully');
         }
     } catch (error) {
-        console.error('Error updating filter:', error);
+        console.error('❌ Error updating filter:', error);
     }
 }
 
@@ -743,6 +757,8 @@ async function updateFilter() {
 async function updateShift(value) {
     if (!currentTuningSSRC) return;
     
+    console.log(`🎛️ Updating shift for SSRC ${currentTuningSSRC}: ${value} Hz`);
+    
     try {
         const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/shift`, {
             method: 'POST',
@@ -750,11 +766,14 @@ async function updateShift(value) {
             body: JSON.stringify({ shift_hz: parseFloat(value) })
         });
         
+        const data = await response.json();
         if (!response.ok) {
-            console.error('Failed to update shift');
+            console.error('❌ Failed to update shift:', data);
+        } else {
+            console.log('✅ Shift updated successfully');
         }
     } catch (error) {
-        console.error('Error updating shift:', error);
+        console.error('❌ Error updating shift:', error);
     }
 }
 
@@ -765,6 +784,7 @@ async function updateOutputLevel(value) {
     if (!currentTuningSSRC) return;
     
     document.getElementById('output-level-value').textContent = parseFloat(value).toFixed(2);
+    console.log(`🎛️ Updating output level for SSRC ${currentTuningSSRC}: ${value}`);
     
     try {
         const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/output-level`, {
@@ -773,11 +793,14 @@ async function updateOutputLevel(value) {
             body: JSON.stringify({ level: parseFloat(value) })
         });
         
+        const data = await response.json();
         if (!response.ok) {
-            console.error('Failed to update output level');
+            console.error('❌ Failed to update output level:', data);
+        } else {
+            console.log('✅ Output level updated successfully');
         }
     } catch (error) {
-        console.error('Error updating output level:', error);
+        console.error('❌ Error updating output level:', error);
     }
 }
 
