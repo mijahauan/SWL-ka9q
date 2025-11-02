@@ -90,11 +90,13 @@ from ka9q import RadiodControl
 
 control = RadiodControl('bee1-hf-status.local')
 try:
-    control.create_channel(
+    control.create_and_configure_channel(
         ssrc=9700000,
         frequency_hz=9700000,
         preset='am',
-        sample_rate=12000
+        sample_rate=12000,
+        agc_enable=1,
+        gain=50.0
     )
     print("✅ Channel created successfully")
 except Exception as e:

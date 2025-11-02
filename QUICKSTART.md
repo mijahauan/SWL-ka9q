@@ -22,13 +22,15 @@ ps aux | grep radiod
 ./setup-venv.sh
 
 # 2. Install Node.js dependencies
-npm install
+pnpm install
+# or: npm install
 ```
 
 ## Start the Server
 
 ```bash
-npm start
+pnpm start
+# or: npm start
 ```
 
 Open your browser to: **http://localhost:3100**
@@ -80,14 +82,14 @@ control = RadiodControl('bee1-hf-status.local')  // Change hostname
 
 ### Add/Edit Station Schedules
 
-**bc-time.txt** - Add broadcast schedules:
+**bc-time.txt** - Add broadcast schedules (EiBi format):
 ```
-6000 | Radio Havana Cuba | 0000-0100 | daily | English | North America
+0000 0100 CUB RHC E NAm 6000
 ```
 
-**bc-freq.txt** - Add station details:
+**bc-freq.txt** - Add station details (pipe-delimited):
 ```
-6000 | Radio Havana Cuba | 100 | Bauta | Americas | Spanish/English
+6000 | Radio Havana Cuba | 100 | Bauta | NAm | Spanish/English
 ```
 
 Then reload: Click **🔄 Reload Schedules** button

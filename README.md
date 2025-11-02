@@ -1,6 +1,6 @@
 # Broadcast Station Monitor (SWL-ka9q)
 
-A modern web-based interface for monitoring shortwave broadcast stations with live audio streaming capabilities. Built on top of [ka9q-radio](https://github.com/ka9q/ka9q-radio) and the [ka9q-python](https://github.com/mijahauan/ka9q-python) package, this tool highlights stations currently on the air and provides one-click audio playback via WebSocket streaming.
+A web-based interface for monitoring shortwave broadcast stations with live audio streaming capabilities. Built on top of [ka9q-radio](https://github.com/ka9q/ka9q-radio) and the [ka9q-python](https://github.com/mijahauan/ka9q-python) package, this tool highlights stations currently on the air and provides one-click audio playback via WebSocket streaming.
 
 ![Version](https://img.shields.io/badge/version-1.0.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -9,13 +9,15 @@ A modern web-based interface for monitoring shortwave broadcast stations with li
 
 ✨ **Real-Time Station Monitoring**
 - Automatically highlights broadcast stations currently on the air based on UTC schedule
-- Displays 50+ international shortwave broadcasters
+- Displays 7300+ broadcast schedules from EiBi database
+- Monitors 1400+ unique frequencies across HF bands
 - Updates every 60 seconds to reflect schedule changes
 
 🎧 **Live Audio Streaming**
 - One-click toggle to listen to any active station
-- WebSocket-based RTP audio streaming (following signal-recorder architecture)
-- Web Audio API for seamless browser-based playback
+- WebSocket-based PCM audio streaming from ka9q-radio RTP multicast
+- Server-side RTP parsing with PCM extraction and byte-swapping
+- Web Audio API for seamless browser-based playback at 12 kHz mono
 - Supports multiple simultaneous streams
 
 📡 **Advanced Filtering**
@@ -95,12 +97,14 @@ A modern web-based interface for monitoring shortwave broadcast stations with li
 
 3. **Install Node.js dependencies:**
    ```bash
-   npm install
+   pnpm install
+   # or: npm install
    ```
 
-4. **Configure broadcast schedules** (optional):
-   - Edit `bc-time.txt` for time-based schedules
-   - Edit `bc-freq.txt` for frequency/station information
+4. **Broadcast schedules included:**
+   - `bc-time.txt` contains 7337 EiBi broadcast schedules
+   - `bc-freq.txt` contains 1482 frequency entries
+   - Files are ready to use, or customize with your own schedules
 
 ## Configuration
 
@@ -115,31 +119,75 @@ const KA9Q_STATUS_PORT = 5006;                // radiod status port
 const KA9Q_AUDIO_PORT = 5004;                 // RTP audio port
 ```
 
+### Updating Broadcast Schedules
+
+**EiBi publishes new schedules twice a year:**
+- **A-season** (late March): Spring/Summer schedules
+- **B-season** (late October): Fall/Winter schedules
+
+**Automatic Update Method:**
+
+1. **Download the latest schedule:**
+   ```bash
+   ./update-schedule.sh
+   # Then enter: sked-b25.txt (or current season)
+   ```
+
+2. **The server automatically detects and applies the update:**
+   - Checks for `new_schedule.txt` every 5 minutes
+   - Backs up current schedule to `bc-time.backup.[timestamp].txt`
+   - Replaces `bc-time.txt` with new schedule
+   - Reloads station data automatically
+
+**Manual Update Method:**
+
+1. **Download from EiBi:**
+   ```bash
+   wget https://www.eibispace.de/dx/sked-b25.txt -O new_schedule.txt
+   # or: curl -o new_schedule.txt https://www.eibispace.de/dx/sked-b25.txt
+   ```
+
+2. **Place in root directory:**
+   ```bash
+   # File should be named: new_schedule.txt
+   # Server will auto-detect within 5 minutes
+   ```
+
+3. **Or apply immediately:**
+   ```bash
+   pnpm start  # Restart server
+   ```
+
+**Available EiBi schedules:** https://www.eibispace.de/dx/
+
+📘 **See [SCHEDULE_UPDATE.md](SCHEDULE_UPDATE.md) for detailed schedule update guide**
+
 ### Broadcast Schedule Format
 
-**bc-time.txt** (Time-based schedules):
+**bc-time.txt** (EiBi format):
 ```
-# Format: Frequency(kHz) | Station | Time (UTC) | Days | Language | Target
-5850 | Radio Slovakia Int | 0130-0200 | daily | English | North America
-9700 | Radio Bulgaria | 2000-2100 | 1,2,3,4,5 | English | Europe
-```
-
-**bc-freq.txt** (Station details):
-```
-# Format: Frequency(kHz) | Station | Power(kW) | Location | Target | Notes
-5850 | Radio Slovakia Int | 100 | Rimavska Sobota | Europe/North America | Multiple daily broadcasts
+Time(start) Time(end) [Days] ITU Station Lang Target Frequencies
+0130 0200 SVK RSI E NAm 5850 9700
 ```
 
-- **Days**: Use `daily` or comma-separated numbers (1=Mon, 2=Tue, ..., 7=Sun)
-- **Time**: 24-hour UTC format (HHMM-HHMM)
-- **Frequency**: In kHz
+**bc-freq.txt** (Pipe-delimited):
+```
+Frequency(kHz) | Station | Power(kW) | Location | Target | Notes
+5850 | RSI | 100 | Rimavska Sobota | NAm,Eu | Multiple broadcasts
+```
+
+- **Days**: Optional field, 1=Mon through 7=Sun, or omit for daily
+- **Time**: 24-hour UTC format (HHMM)
+- **Frequency**: In kHz (converted to Hz internally)
+- Files use EiBi database format for maximum compatibility
 
 ## Usage
 
 ### Start the Server
 
 ```bash
-npm start
+pnpm start
+# or: npm start
 ```
 
 The server will start on http://localhost:3100
@@ -147,7 +195,17 @@ The server will start on http://localhost:3100
 ### Development Mode (with auto-reload)
 
 ```bash
-npm run dev
+pnpm run dev
+# or: npm run dev
+```
+
+### Environment Variables
+
+Optional configuration via environment variables:
+```bash
+export PORT=3100                              # Web server port (default: 3100)
+export RADIOD_HOSTNAME=bee1-hf-status.local   # radiod hostname (default: bee1-hf-status.local)
+pnpm start
 ```
 
 ### Access the Interface
@@ -165,10 +223,12 @@ npm run dev
 
 When you click "Listen Live":
 1. The server requests a new audio channel from ka9q-radio via ka9q-python
-2. A WebSocket connection is established for RTP packet streaming
-3. Audio packets are decoded in the browser using Web Audio API
-4. Multiple stations can be played simultaneously
-5. Click **⏹️ Stop Listening** to end the stream
+2. A WebSocket connection is established for PCM audio streaming
+3. Server receives RTP multicast, parses headers, extracts PCM payload
+4. Server byte-swaps PCM data for correct endianness and forwards to browser
+5. Browser schedules PCM buffers using Web Audio API for gapless playback
+6. Multiple stations can be played simultaneously
+7. Click **⏹️ Stop Listening** to end the stream
 
 ## API Endpoints
 
@@ -190,20 +250,29 @@ When you click "Listen Live":
 
 ## WebSocket Protocol
 
-Audio streaming follows the signal-recorder architecture:
+Audio streaming uses a simple binary protocol:
 
-**Client → Server:**
+**Client → Server (text messages):**
 ```
 A:START    # Activate audio streaming
 A:STOP     # Deactivate audio streaming
 ```
 
-**Server → Client:**
+**Server → Client (binary messages):**
 ```
-Binary RTP packets (12-byte header + PCM audio payload)
+Raw PCM audio data (16-bit signed integers, little-endian, mono, 12 kHz)
 ```
 
-The client-side JavaScript handles RTP parsing and feeds PCM data to the Web Audio API.
+The server handles:
+- RTP packet reception from ka9q-radio multicast
+- RTP header parsing (including CSRC and extension fields)
+- PCM payload extraction
+- Byte-swapping for correct endianness
+
+The client-side JavaScript:
+- Receives PCM binary data via WebSocket
+- Converts 16-bit integers to Float32 for Web Audio API
+- Schedules audio buffers for gapless playback
 
 ## File Structure
 
@@ -211,13 +280,19 @@ The client-side JavaScript handles RTP parsing and feeds PCM data to the Web Aud
 SWL-ka9q/
 ├── server.js              # Node.js backend server
 ├── package.json           # Node.js dependencies
-├── bc-time.txt            # Time-based broadcast schedules
-├── bc-freq.txt            # Frequency-based station info
+├── setup-venv.sh          # Python venv setup script
+├── update-schedule.sh     # EiBi schedule updater helper
+├── bc-time.txt            # EiBi time-based schedules (7337 entries)
+├── bc-freq.txt            # Frequency database (1482 entries)
 ├── public/
-│   ├── index.html         # Main web interface
+│   ├── index.html         # Main web interface (tabbed UI)
 │   ├── styles.css         # Styling
-│   └── app.js             # Frontend JavaScript
-└── README.md              # This file
+│   └── app.js             # Frontend JavaScript (AudioSession, WebSocket)
+├── README.md              # This file
+├── QUICKSTART.md          # Quick start guide
+├── SCHEDULE_UPDATE.md     # Schedule update guide
+├── TROUBLESHOOTING.md     # Detailed troubleshooting
+└── .gitignore             # Git ignore patterns
 ```
 
 ## Troubleshooting

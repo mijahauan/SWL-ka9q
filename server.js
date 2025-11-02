@@ -14,7 +14,6 @@ import dgram from 'dgram';
 import { EventEmitter } from 'events';
 import { WebSocketServer } from 'ws';
 import { exec } from 'child_process';
-import OpusEncoder from '@discordjs/opus';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -24,6 +23,7 @@ const PORT = process.env.PORT || 3100;
 // Configuration
 const TIME_SCHEDULE_FILE = path.join(__dirname, 'bc-time.txt');
 const FREQ_SCHEDULE_FILE = path.join(__dirname, 'bc-freq.txt');
+const NEW_SCHEDULE_FILE = path.join(__dirname, 'new_schedule.txt');
 const KA9Q_STATUS_MULTICAST = '239.192.152.141';
 const KA9Q_STATUS_PORT = 5006;
 const KA9Q_AUDIO_PORT = 5004;
@@ -151,7 +151,6 @@ class Ka9qRadioProxy extends EventEmitter {
     let packetCounts = new Map();
     let forwardedCounts = new Map();
     let lastLogTime = new Map();
-    let opusDecoders = new Map(); // Opus decoder per SSRC
     
     this.audioSocket.on('message', (msg, rinfo) => {
       if (msg.length < 12) return; // Minimum RTP header size
@@ -253,7 +252,7 @@ try:
     
     control = RadiodControl('${RADIOD_HOSTNAME}')
     
-    # Create and configure AM channel (uses Opus by default)
+    # Create and configure AM channel (outputs PCM audio)
     print(f"DEBUG: Creating channel SSRC={${ssrc}}, frequency={${frequency}} Hz", file=sys.stderr)
     control.create_and_configure_channel(
         ssrc=${ssrc},
@@ -598,10 +597,45 @@ function getActiveStations() {
 }
 
 /**
+ * Check for new schedule file and update if present
+ */
+function checkAndUpdateSchedule() {
+  try {
+    if (fs.existsSync(NEW_SCHEDULE_FILE)) {
+      console.log('🔄 New schedule file detected: new_schedule.txt');
+      
+      // Backup current schedule
+      const backupFile = path.join(__dirname, `bc-time.backup.${Date.now()}.txt`);
+      fs.copyFileSync(TIME_SCHEDULE_FILE, backupFile);
+      console.log(`💾 Backed up current schedule to ${path.basename(backupFile)}`);
+      
+      // Replace with new schedule
+      fs.copyFileSync(NEW_SCHEDULE_FILE, TIME_SCHEDULE_FILE);
+      console.log('✅ Updated bc-time.txt with new schedule');
+      
+      // Remove new_schedule.txt
+      fs.unlinkSync(NEW_SCHEDULE_FILE);
+      console.log('🗑️  Removed new_schedule.txt');
+      
+      return true;
+    }
+  } catch (err) {
+    console.error('❌ Error updating schedule:', err.message);
+  }
+  return false;
+}
+
+/**
  * Load and reload schedules
  */
 function loadSchedules() {
   console.log('📡 Loading broadcast schedules...');
+  
+  // Check for new schedule file
+  const updated = checkAndUpdateSchedule();
+  if (updated) {
+    console.log('🎉 Schedule updated! Loading new data...');
+  }
   
   const timeSchedules = parseTimeSchedule();
   frequencyInfo = parseFreqSchedule();
@@ -648,14 +682,6 @@ function loadSchedules() {
 // Middleware
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-// Serve opus-decoder library from node_modules with correct MIME type
-app.use('/lib', express.static(path.join(__dirname, 'node_modules/opus-decoder/dist'), {
-  setHeaders: (res, path) => {
-    if (path.endsWith('.js')) {
-      res.setHeader('Content-Type', 'application/javascript');
-    }
-  }
-}));
 
 // API Routes
 

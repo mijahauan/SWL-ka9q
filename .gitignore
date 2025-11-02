@@ -12,6 +12,11 @@ venv/
 __pycache__/
 .ka9q-stream.py
 
+# Schedule updates
+new_schedule.txt
+bc-time.backup.*.txt
+bc-freq.backup.*.txt
+
 # Environment variables
 .env
 .env.local
