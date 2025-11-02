@@ -394,33 +394,23 @@ except Exception as e:
 
   async setAGC(ssrc, enable, hangtime, headroom) {
     const enablePython = enable ? 'True' : 'False';
-    return this.executeTuningCommand(ssrc, `
-control.set_agc(${ssrc}, ${enablePython}, hangtime=${hangtime}, headroom=${headroom})
-    `);
+    return this.executeTuningCommand(ssrc, `control.set_agc(${ssrc}, ${enablePython}, hangtime=${hangtime}, headroom=${headroom})`);
   }
 
   async setGain(ssrc, gain_db) {
-    return this.executeTuningCommand(ssrc, `
-control.set_gain(${ssrc}, ${gain_db})
-    `);
+    return this.executeTuningCommand(ssrc, `control.set_gain(${ssrc}, ${gain_db})`);
   }
 
   async setFilter(ssrc, low_edge, high_edge) {
-    return this.executeTuningCommand(ssrc, `
-control.set_filter(${ssrc}, low_edge=${low_edge}, high_edge=${high_edge})
-    `);
+    return this.executeTuningCommand(ssrc, `control.set_filter(${ssrc}, low_edge=${low_edge}, high_edge=${high_edge})`);
   }
 
   async setShift(ssrc, shift_hz) {
-    return this.executeTuningCommand(ssrc, `
-control.set_shift_frequency(${ssrc}, ${shift_hz})
-    `);
+    return this.executeTuningCommand(ssrc, `control.set_shift_frequency(${ssrc}, ${shift_hz})`);
   }
 
   async setOutputLevel(ssrc, level) {
-    return this.executeTuningCommand(ssrc, `
-control.set_output_level(${ssrc}, ${level})
-    `);
+    return this.executeTuningCommand(ssrc, `control.set_output_level(${ssrc}, ${level})`);
   }
 
   async executeTuningCommand(ssrc, command) {
@@ -434,10 +424,7 @@ try:
     control = RadiodControl('${RADIOD_HOSTNAME}')
     ${command}
     
-    print(json.dumps({
-        'success': True,
-        'ssrc': ${ssrc}
-    }))
+    print(json.dumps({'success': True, 'ssrc': ${ssrc}}))
 except Exception as e:
     import traceback
     print(json.dumps({
