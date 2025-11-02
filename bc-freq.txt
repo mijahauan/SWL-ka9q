@@ -1,0 +1,37 @@
+# Broadcast Station Schedule (Frequency-Based Format)
+# Format: Frequency(kHz) | Station | Power(kW) | Location | Target | Notes
+
+5850 | Radio Slovakia Int | 100 | Rimavska Sobota | Europe/North America | Multiple daily broadcasts
+5900 | Radio Bulgaria | 100 | Kostinbrod | Europe/North America | English service
+5950 | NHK World Radio Japan | 300 | Yamata | Asia/Pacific/Europe | 24hr service
+6000 | Radio Havana Cuba | 100 | Bauta | Americas | Spanish/English
+6115 | Radio Taiwan Int | 250 | Paochung | Asia/North America | Multiple languages
+6130 | VOA (Voice of America) | 250 | Sao Tome | Africa | English service
+6160 | RNZI (Radio New Zealand Int) | 100 | Rangitaiki | Pacific | Continuous broadcast
+7205 | Radio Belarus | 75 | Minsk | Europe/North America | English broadcasts
+7285 | Vatican Radio | 100 | Santa Maria di Galeria | Worldwide | Religious programming
+7315 | Radio France Int | 250 | Issoudun | Africa | French/English
+9330 | WBCQ | 50 | Monticello, Maine | North America | 24hr operation
+9395 | Greek Voice | 100 | Avlis | Europe | Greek/English
+9420 | Voice of Greece | 100 | Avlis | Europe/Americas | Multiple broadcasts
+9580 | Africa No.1 | 500 | Moyabi, Gabon | Africa | French service
+9665 | KTWR Guam | 100 | Agat, Guam | Asia/Pacific | Religious programming
+9700 | Radio Bulgaria | 100 | Kostinbrod | Europe | English broadcasts
+9730 | Radio Romania Int | 300 | Galbeni/Tiganesti | Europe/North America | Multiple languages
+9800 | Radio Cairo | 250 | Abu Zaabal | Europe/Middle East | English service
+9870 | VOA Radiogram | 100 | Various | Worldwide | Digital mode broadcast
+11580 | KBS World Radio | 250 | Kimjae | Asia/North America | Korean international
+11650 | Vatican Radio | 100 | Santa Maria di Galeria | Worldwide | Multiple languages
+11730 | Radio Romania Int | 300 | Galbeni/Tiganesti | Europe | English service
+11780 | Radio Nacional Amazonia | 250 | Brasilia | South America | Portuguese, 24hr
+11810 | Radio France Int | 250 | Issoudun | Africa | English/French
+15120 | Voice of Mongolia | 100 | Khonkhor | Asia/Europe | English broadcasts
+15190 | Radio Inconfidencia | 10 | Belo Horizonte | South America | Portuguese, 24hr
+15240 | HCJB Australia | 100 | Kununurra | Asia/Pacific | Religious programming
+15345 | NHK World Radio Japan | 300 | Yamata | Asia/Europe | English service
+15400 | BBC World Service | 250 | Various | Europe/Africa | 24hr news/info
+15460 | All India Radio | 500 | Bangalore/Delhi | Asia/Europe | English service
+15510 | Radio France Int | 250 | Issoudun | Africa | French programming
+17790 | China Radio Int | 500 | Beijing/Kunming | Worldwide | Multiple languages
+17800 | Radio Romania Int | 300 | Galbeni/Tiganesti | Europe | English service
+17895 | WBCQ | 50 | Monticello, Maine | Europe | Independent broadcaster

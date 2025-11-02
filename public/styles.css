@@ -1,0 +1,503 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e8ba3 100%);
+    color: #333;
+    min-height: 100vh;
+}
+
+/* Navbar */
+.navbar {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    padding: 20px 40px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.nav-brand h1 {
+    font-size: 28px;
+    color: #1e3c72;
+    margin-bottom: 5px;
+}
+
+.nav-subtitle {
+    font-size: 14px;
+    color: #666;
+}
+
+.nav-stats {
+    display: flex;
+    gap: 30px;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.stat-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #999;
+    margin-bottom: 5px;
+}
+
+.stat-value {
+    font-size: 20px;
+    font-weight: bold;
+    color: #1e3c72;
+}
+
+/* Container */
+.container {
+    max-width: 1400px;
+    margin: 30px auto;
+    padding: 0 20px;
+}
+
+/* Tabs */
+.tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #e0e0e0;
+    padding-bottom: 0;
+}
+
+.tab-btn {
+    padding: 12px 24px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+    color: #666;
+    transition: all 0.3s;
+    position: relative;
+    bottom: -2px;
+}
+
+.tab-btn:hover {
+    color: #1e3c72;
+    background: rgba(30, 60, 114, 0.05);
+}
+
+.tab-btn.active {
+    color: #1e3c72;
+    border-bottom-color: #1e3c72;
+}
+
+/* Controls */
+.controls {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    margin-bottom: 25px;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.info-group {
+    display: flex;
+    align-items: center;
+}
+
+.info-text {
+    font-size: 14px;
+    color: #666;
+    font-weight: 500;
+}
+
+.search-group {
+    flex: 1;
+    min-width: 250px;
+}
+
+.search-group input {
+    width: 100%;
+    padding: 10px 15px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: border-color 0.3s;
+}
+
+.search-group input:focus {
+    outline: none;
+    border-color: #1e3c72;
+}
+
+.btn-reload {
+    padding: 10px 20px;
+    background: #1e3c72;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: background 0.3s;
+}
+
+.btn-reload:hover {
+    background: #2a5298;
+}
+
+/* Frequency Bands */
+.frequency-bands {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    margin-bottom: 25px;
+}
+
+.frequency-bands h3 {
+    font-size: 16px;
+    margin-bottom: 15px;
+    color: #1e3c72;
+}
+
+.band-filters {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.band-btn {
+    padding: 8px 16px;
+    background: #f5f5f5;
+    border: 2px solid #e0e0e0;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.3s;
+}
+
+.band-btn:hover {
+    background: #e0e0e0;
+    border-color: #1e3c72;
+}
+
+.band-btn.active {
+    background: #1e3c72;
+    color: white;
+    border-color: #1e3c72;
+}
+
+/* Stations Grid */
+.stations-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 20px;
+}
+
+.station-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s, box-shadow 0.3s, opacity 0.3s;
+    border-left: 5px solid #ccc;
+    opacity: 0.6;
+}
+
+.station-card.on-air {
+    border-left-color: #4CAF50;
+    opacity: 1;
+    background: rgba(255, 255, 255, 1);
+}
+
+.station-card.listening {
+    border-left-color: #2196F3;
+    box-shadow: 0 6px 25px rgba(33, 150, 243, 0.3);
+}
+
+.station-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.station-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 15px;
+}
+
+.station-title {
+    flex: 1;
+}
+
+.station-name {
+    font-size: 18px;
+    font-weight: bold;
+    color: #1e3c72;
+    margin-bottom: 5px;
+}
+
+.station-frequency {
+    font-size: 24px;
+    font-weight: bold;
+    color: #2a5298;
+}
+
+.station-frequency .unit {
+    font-size: 14px;
+    color: #999;
+}
+
+.status-badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-badge.on-air {
+    background: #4CAF50;
+    color: white;
+}
+
+.status-badge.off-air {
+    background: #f5f5f5;
+    color: #999;
+    border: 1px solid #e0e0e0;
+}
+
+.station-details {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 15px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.detail-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #999;
+    margin-bottom: 3px;
+    letter-spacing: 0.5px;
+}
+
+.detail-value {
+    font-size: 14px;
+    color: #333;
+    font-weight: 500;
+}
+
+.station-time {
+    padding: 10px;
+    background: #fff3cd;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 13px;
+    margin-bottom: 15px;
+    color: #856404;
+}
+
+.station-technical {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: #e8f5e9;
+    border-radius: 6px;
+}
+
+.audio-controls {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-listen {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-listen.play {
+    background: #4CAF50;
+    color: white;
+}
+
+.btn-listen.play:hover {
+    background: #45a049;
+}
+
+.btn-listen.stop {
+    background: #f44336;
+    color: white;
+}
+
+.btn-listen.stop:hover {
+    background: #da190b;
+}
+
+.btn-listen:disabled {
+    background: #e0e0e0;
+    color: #999;
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+/* Audio visualization */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.listening .station-frequency {
+    animation: pulse 2s ease-in-out infinite;
+}
+
+/* Audio Status Bar */
+.audio-status {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(33, 150, 243, 0.95);
+    backdrop-filter: blur(10px);
+    color: white;
+    padding: 15px 20px;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
+    display: none;
+}
+
+.audio-status.active {
+    display: block;
+}
+
+.audio-status-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#stop-all-audio {
+    padding: 8px 16px;
+    background: white;
+    color: #2196F3;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.3s;
+}
+
+#stop-all-audio:hover {
+    background: #f0f0f0;
+}
+
+/* Loading */
+.loading {
+    text-align: center;
+    padding: 60px;
+    font-size: 18px;
+    color: white;
+}
+
+/* Error state */
+.error-message {
+    background: rgba(244, 67, 54, 0.95);
+    color: white;
+    padding: 20px;
+    border-radius: 12px;
+    text-align: center;
+    margin: 20px 0;
+}
+
+/* Schedule list in frequency view */
+.schedule-list {
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    margin-bottom: 15px;
+}
+
+.schedule-item {
+    padding: 8px 12px;
+    margin: 4px 0;
+    background: white;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #666;
+    border-left: 3px solid #e0e0e0;
+}
+
+.schedule-item.active-schedule {
+    color: #1e3c72;
+    font-weight: 600;
+    border-left-color: #4CAF50;
+    background: #e8f5e9;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .navbar {
+        padding: 15px 20px;
+    }
+    
+    .nav-brand h1 {
+        font-size: 22px;
+    }
+    
+    .nav-stats {
+        width: 100%;
+        justify-content: space-around;
+    }
+    
+    .stations-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .band-filters {
+        flex-direction: column;
+    }
+}

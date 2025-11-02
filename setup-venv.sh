@@ -1,0 +1,26 @@
+#!/bin/bash
+
+echo "🐍 Setting up Python virtual environment for ka9q-python..."
+
+# Create virtual environment
+if [ ! -d "venv" ]; then
+    echo "📦 Creating virtual environment..."
+    python3 -m venv venv
+    echo "✅ Virtual environment created"
+else
+    echo "✅ Virtual environment already exists"
+fi
+
+# Activate and install ka9q-python
+echo "📥 Installing ka9q-python from GitHub..."
+./venv/bin/pip3 install git+https://github.com/mijahauan/ka9q-python.git
+
+# Verify installation
+echo ""
+echo "🔍 Verifying installation..."
+./venv/bin/python3 -c "from ka9q import RadiodControl; print('✅ ka9q-python installed successfully')" && \
+echo "" && \
+echo "🎉 Setup complete!" && \
+echo "" && \
+echo "You can now start the server with: npm start" || \
+echo "❌ Installation verification failed"

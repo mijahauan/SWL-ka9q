@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Broadcast Station Monitor</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <h1>📻 Broadcast Station Monitor</h1>
+            <p class="nav-subtitle">Shortwave Radio Monitoring with Live Audio</p>
+        </div>
+        <div class="nav-stats">
+            <div class="stat-item">
+                <span class="stat-label">Time (UTC)</span>
+                <span class="stat-value" id="utc-time">--:--:--</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Total Stations</span>
+                <span class="stat-value" id="total-count">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">On Air Now</span>
+                <span class="stat-value" id="active-count">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Listening</span>
+                <span class="stat-value" id="listening-count">0</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('time')">📅 By Time Schedule</button>
+            <button class="tab-btn" onclick="switchTab('frequency')">📡 By Frequency</button>
+        </div>
+
+        <div class="controls">
+            <div class="info-group">
+                <span class="info-text" id="view-info">
+                    📻 Showing all stations • Green border = Currently on-air • Click ▶️ to listen live
+                </span>
+            </div>
+            <div class="search-group">
+                <input type="text" id="search" placeholder="Search by station, frequency, or language...">
+            </div>
+            <button class="btn-reload" onclick="reloadSchedules()">🔄 Reload Schedules</button>
+        </div>
+
+        <div class="frequency-bands">
+            <h3>Quick Filter by Band</h3>
+            <div class="band-filters">
+                <button class="band-btn" onclick="filterByBand(null)">All Bands</button>
+                <button class="band-btn" onclick="filterByBand(5, 6)">49m (5900-6200 kHz)</button>
+                <button class="band-btn" onclick="filterByBand(7, 7.5)">41m (7100-7600 kHz)</button>
+                <button class="band-btn" onclick="filterByBand(9, 10)">31m (9400-9900 kHz)</button>
+                <button class="band-btn" onclick="filterByBand(11, 12)">25m (11600-12100 kHz)</button>
+                <button class="band-btn" onclick="filterByBand(15, 16)">19m (15100-15800 kHz)</button>
+                <button class="band-btn" onclick="filterByBand(17, 18)">16m (17480-17900 kHz)</button>
+            </div>
+        </div>
+
+        <div id="stations-container" class="stations-grid">
+            <div class="loading">Loading stations...</div>
+        </div>
+    </div>
+
+    <div id="audio-status" class="audio-status">
+        <div class="audio-status-content">
+            <span id="audio-status-text">No audio playing</span>
+            <button id="stop-all-audio" onclick="stopAllAudio()" style="display: none;">Stop All</button>
+        </div>
+    </div>
+
+    <!-- Opus decoding done server-side, browser receives raw PCM -->
+    <script src="app.js"></script>
+</body>
+</html>
