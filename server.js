@@ -242,7 +242,8 @@ try:
     )
     print(f"DEBUG: Channel created successfully", file=sys.stderr)
     
-    # Get channel info
+    # Get channel info using native Python discovery (no control executable needed)
+    # discover_channels() uses pure Python multicast listener by default
     channels = discover_channels('${RADIOD_HOSTNAME}')
     
     # Debug: print all discovered SSRCs and frequencies

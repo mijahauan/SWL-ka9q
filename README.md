@@ -90,6 +90,11 @@ A web-based interface for monitoring shortwave broadcast stations with live audi
 - SDR hardware compatible with ka9q-radio (e.g., RX888, Airspy, RTL-SDR)
 - Network access to radiod multicast streams
 
+### Notes
+
+- ✅ **No external executables required**: The ka9q-python package now uses native Python channel discovery. The `control` executable from ka9q-radio is no longer needed.
+- ✅ **Cross-platform compatible**: Works on macOS, Linux, and Windows with zero external dependencies beyond Python itself.
+
 ## Installation
 
 1. **Clone the repository:**
