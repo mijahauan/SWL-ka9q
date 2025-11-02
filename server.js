@@ -57,12 +57,9 @@ class Ka9qRadioProxy extends EventEmitter {
     // Create control socket for radiod status
     this.controlSocket = dgram.createSocket('udp4');
     this.controlSocket.bind(KA9Q_STATUS_PORT, () => {
-      console.log(`🎛️  Control socket bound to port ${KA9Q_STATUS_PORT}`);
-      
       // Join status multicast
       try {
         this.controlSocket.addMembership(KA9Q_STATUS_MULTICAST, '0.0.0.0');
-        console.log(`📡 Joined status multicast ${KA9Q_STATUS_MULTICAST}`);
       } catch (err) {
         console.warn(`⚠️  Could not join multicast (radiod may not be running): ${err.message}`);
       }
@@ -74,9 +71,6 @@ class Ka9qRadioProxy extends EventEmitter {
     this.audioSocket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
     
     this.audioSocket.on('listening', () => {
-      const address = this.audioSocket.address();
-      console.log(`🎧 Audio socket bound to ${address.address}:${address.port}`);
-      
       // Enable multicast loopback for local testing
       this.audioSocket.setMulticastLoopback(true);
       
@@ -98,8 +92,6 @@ class Ka9qRadioProxy extends EventEmitter {
         if (status && status.ssrc) {
           const stream = this.activeStreams.get(status.ssrc);
           if (stream && !stream.multicastAddress) {
-            console.log(`✅ Discovered PCM stream: SSRC=${status.ssrc} → ${status.multicast_address}:${status.multicast_port}`);
-            
             stream.multicastAddress = status.multicast_address;
             stream.multicastPort = status.multicast_port;
             
@@ -107,7 +99,6 @@ class Ka9qRadioProxy extends EventEmitter {
             if (!this.joinedMulticastGroups.has(status.multicast_address)) {
               this.audioSocket.addMembership(status.multicast_address, '0.0.0.0');
               this.joinedMulticastGroups.add(status.multicast_address);
-              console.log(`📡 Joined audio multicast ${status.multicast_address} for SSRC ${status.ssrc}`);
             }
           }
         }
@@ -163,12 +154,7 @@ class Ka9qRadioProxy extends EventEmitter {
       const now = Date.now();
       const lastLog = lastLogTime.get(ssrc) || 0;
       
-      // Log every 30 seconds per SSRC (reduced to avoid flooding console)
-      if (now - lastLog > 30000) {
-        const fwd = forwardedCounts.get(ssrc) || 0;
-        console.log(`📦 Received ${packetCounts.get(ssrc)} packets for SSRC ${ssrc} (forwarded: ${fwd})`);
-        lastLogTime.set(ssrc, now);
-      }
+      // Suppress periodic packet logging - only log errors
       
       // Forward to WebSocket clients
       if (global.audioSessions) {
@@ -191,15 +177,8 @@ class Ka9qRadioProxy extends EventEmitter {
             const extension = (byte0 >> 4) & 0x01;
             const payloadType = byte1 & 0x7F;
             
-            // Debug first packet
-            if (!session.debugLogged) {
-              console.log(`🔍 RTP Debug for SSRC ${ssrc}:`);
-              console.log(`   Packet length: ${msg.length}`);
-              console.log(`   Payload Type: ${payloadType}`);
-              console.log(`   CSRC count: ${csrcCount}`);
-              console.log(`   Extension: ${extension}`);
-              session.debugLogged = true;
-            }
+            // Mark first packet as logged
+            session.debugLogged = true;
             
             // Calculate header length (from signal-recorder)
             let payloadOffset = 12 + (csrcCount * 4);
@@ -239,9 +218,7 @@ class Ka9qRadioProxy extends EventEmitter {
     const ssrc = Math.floor(frequency); // Frequency is already in Hz, use as SSRC
     const freqKHz = frequency / 1000;
     
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`🎵 Starting audio stream for ${freqKHz} kHz (SSRC: ${ssrc})`);
-    console.log(`📡 Using radiod hostname: ${RADIOD_HOSTNAME}`);
+    console.log(`🎵 Starting stream: ${freqKHz} kHz`);
     
     return new Promise((resolve, reject) => {
       // Write Python script to temp file to avoid escaping issues
@@ -320,10 +297,7 @@ except Exception as e:
           return;
         }
         
-        if (stderr) {
-          // Log stderr (contains DEBUG messages)
-          console.log(stderr.trim());
-        }
+        // Suppress Python stderr debug messages
         
         try {
           const result = JSON.parse(stdout.trim());
@@ -335,15 +309,9 @@ except Exception as e:
             return;
           }
           
-          console.log(`✅ Audio stream created: SSRC=${result.ssrc}`);
-          console.log(`   📻 Requested: ${frequency} Hz (${frequency / 1000} kHz)`);
-          console.log(`   📻 Radiod reports: ${result.frequency} Hz (${result.frequency / 1000} kHz)`);
-          console.log(`   📡 Multicast: ${result.multicast_address}:${result.multicast_port}`);
-          
           if (Math.abs(result.frequency - frequency) > 1) {
-            console.warn(`⚠️ Frequency mismatch! Requested ${frequency} Hz but radiod tuned to ${result.frequency} Hz`);
+            console.warn(`⚠️ Frequency mismatch! Requested ${frequency} Hz but got ${result.frequency} Hz`);
           }
-          console.log(`${'='.repeat(60)}\n`);
           
           const stream = {
             ssrc: result.ssrc,
@@ -360,7 +328,6 @@ except Exception as e:
           if (result.multicast_address && !this.joinedMulticastGroups.has(result.multicast_address)) {
             this.audioSocket.addMembership(result.multicast_address, '0.0.0.0');
             this.joinedMulticastGroups.add(result.multicast_address);
-            console.log(`📡 Joined multicast ${result.multicast_address} for SSRC ${ssrc}`);
           }
           
           resolve(stream);
@@ -375,8 +342,6 @@ except Exception as e:
   }
   
   stopAudioStream(ssrc) {
-    console.log(`🛑 Stopping audio stream for SSRC ${ssrc}`);
-    
     const stream = this.activeStreams.get(ssrc);
     if (stream) {
       stream.active = false;
@@ -439,7 +404,7 @@ function parseTimeSchedule() {
       fullLines.push(currentLine);
     }
     
-    console.log(`📊 Processing ${fullLines.length} broadcast entries...`);
+    // Suppress processing logs
     
     // Parse each full line
     for (const line of fullLines) {
@@ -504,7 +469,7 @@ function parseTimeSchedule() {
       }
     }
     
-    console.log(`✅ Parsed ${stations.length} station/frequency combinations`);
+    // Suppress parse success log
   } catch (err) {
     console.error('Error parsing time schedule:', err.message, err.stack);
   }
@@ -630,14 +595,10 @@ async function downloadScheduleIfMissing() {
     return false; // Schedule exists, no download needed
   }
   
-  console.log('⚠️  No broadcast schedule found (bc-time.txt missing)');
-  console.log('📥 Attempting to download latest EiBi schedule...');
+  console.log('📥 Downloading latest EiBi schedule...');
   
   const scheduleFile = getCurrentEiBiSeason();
   const url = `https://www.eibispace.de/dx/${scheduleFile}`;
-  
-  console.log(`   Downloading: ${scheduleFile}`);
-  console.log(`   From: ${url}`);
   
   return new Promise((resolve) => {
     https.get(url, (response) => {
@@ -654,20 +615,16 @@ async function downloadScheduleIfMissing() {
       
       fileStream.on('finish', () => {
         fileStream.close();
-        console.log(`✅ Downloaded ${scheduleFile} successfully!`);
-        console.log(`   Saved to: bc-time.txt`);
+        console.log(`✅ Downloaded ${scheduleFile}`);
         
         // Verify it's a valid EiBi file
         try {
           const content = fs.readFileSync(TIME_SCHEDULE_FILE, 'utf-8');
           if (!content.includes('Time(UTC)')) {
-            console.warn('⚠️  Downloaded file may not be a valid EiBi schedule');
-          } else {
-            const entryCount = (content.match(/^\d{4}\s+\d{4}/gm) || []).length;
-            console.log(`   Entries: ~${entryCount} broadcasts`);
+            console.warn('⚠️  Downloaded file may not be valid EiBi format');
           }
         } catch (err) {
-          console.error('⚠️  Could not verify downloaded schedule:', err.message);
+          console.error('⚠️  Could not verify schedule:', err.message);
         }
         
         resolve(true);
