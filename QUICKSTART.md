@@ -26,6 +26,55 @@ pnpm install
 # or: npm install
 ```
 
+## Configuration (Required Before First Start)
+
+### Set Your Radiod Hostname
+
+**⚠️ IMPORTANT:** You must configure the radiod hostname before starting the server.
+
+**Find your radiod hostname:**
+Look in your radiod configuration file (usually `/etc/radio/radiod.conf`) in the `[global]` section for the `status` entry:
+```ini
+[global]
+status = your-radiod-hostname
+```
+
+This hostname is what SWL-ka9q needs to connect to radiod.
+
+**Configure SWL-ka9q:**
+
+Edit `server.js` line 30:
+```javascript
+const RADIOD_HOSTNAME = process.env.RADIOD_HOSTNAME || 'bee1-hf-status.local';
+```
+
+**Change `'bee1-hf-status.local'` to match your radiod's status hostname:**
+
+```javascript
+// Example with hostname from radiod.conf
+const RADIOD_HOSTNAME = process.env.RADIOD_HOSTNAME || 'my-radiod-server.local';
+
+// Example with IP address
+const RADIOD_HOSTNAME = process.env.RADIOD_HOSTNAME || '192.168.1.100';
+```
+
+**Or use an environment variable (recommended):**
+```bash
+export RADIOD_HOSTNAME=192.168.1.100
+# Add to ~/.bashrc or ~/.zshrc to make permanent
+```
+
+### Verify Radiod Connection
+
+Test that you can reach radiod before starting:
+```bash
+# Test with ping
+ping your-radiod-hostname
+
+# Test with Python
+python3 -c "from ka9q import RadiodControl; c = RadiodControl('your-radiod-hostname'); print('✅ Connected')"
+```
+
 ## Start the Server
 
 ```bash
@@ -68,16 +117,15 @@ Open your browser to: **http://localhost:3100**
 
 ### Change Server Port
 
-Edit `server.js`:
+Edit `server.js` line 21:
 ```javascript
 const PORT = 3100;  // Change to your preferred port
 ```
 
-### Update Radiod Hostname
-
-Edit `server.js` in the `startAudioStream()` method:
-```javascript
-control = RadiodControl('bee1-hf-status.local')  // Change hostname
+Or use an environment variable:
+```bash
+export PORT=8080
+pnpm start
 ```
 
 ### Add/Edit Station Schedules
@@ -106,6 +154,8 @@ Compare with schedule times in `bc-time.txt`
 
 ### Can't play audio
 
+**First, verify you configured the radiod hostname correctly (see Configuration section above)**
+
 1. **Is radiod running?**
    ```bash
    ps aux | grep radiod
@@ -113,12 +163,20 @@ Compare with schedule times in `bc-time.txt`
 
 2. **Can you reach radiod?**
    ```bash
-   python3 -c "from ka9q import RadiodControl; c = RadiodControl('bee1-hf-status.local')"
+   # Replace with YOUR radiod hostname
+   python3 -c "from ka9q import RadiodControl; c = RadiodControl('your-radiod-hostname'); print('✅ Connected')"
    ```
 
-3. **Check browser console** (F12) for errors
+3. **Check server logs** for connection errors
+   ```bash
+   # Look for errors like:
+   # "socket.gaierror" or "Connection refused"
+   # This means radiod hostname is wrong
+   ```
 
-4. **Network:** Ensure UDP ports 5004 and 5006 are accessible
+4. **Check browser console** (F12) for errors
+
+5. **Network:** Ensure UDP ports 5004 and 5006 are accessible
 
 ### Nothing loads
 

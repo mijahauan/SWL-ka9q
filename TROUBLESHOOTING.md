@@ -60,23 +60,33 @@ EOF
 
 **If connection fails:**
 
-1. **Check hostname** - Default is `bee1-hf-status.local`
+1. **Check hostname matches radiod configuration**
+   
+   Find the hostname in your radiod configuration file (`/etc/radio/radiod.conf`):
+   ```bash
+   grep "^status" /etc/radio/radiod.conf
+   # Output example: status = bee1-hf-status.local
+   ```
+   
+   The `status` entry in the `[global]` section is the hostname SWL-ka9q needs.
+
+2. **Test connectivity:**
    ```bash
    # Try pinging
-   ping bee1-hf-status.local
+   ping bee1-hf-status.local  # Use YOUR radiod status hostname
    
    # Or use IP address
    ping 192.168.1.100  # Replace with your radiod IP
    ```
 
-2. **Configure correct hostname:**
+3. **Configure correct hostname in SWL-ka9q:**
    ```bash
    # Set via environment variable
-   export RADIOD_HOSTNAME=192.168.1.100  # or your hostname
+   export RADIOD_HOSTNAME=bee1-hf-status.local  # Match radiod.conf status entry
    npm start
    ```
 
-3. **Check firewall/network:**
+4. **Check firewall/network:**
    ```bash
    # Verify UDP ports are accessible
    sudo netstat -ulnp | grep -E '5004|5006'

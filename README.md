@@ -106,6 +106,34 @@ A web-based interface for monitoring shortwave broadcast stations with live audi
    - `bc-freq.txt` contains 1482 frequency entries
    - Files are ready to use, or customize with your own schedules
 
+5. **Configure radiod hostname (REQUIRED):**
+   
+   **⚠️ You must set your radiod hostname before starting the server.**
+   
+   **Find your radiod hostname:**
+   Check your radiod configuration file (usually `/etc/radio/radiod.conf`) in the `[global]` section for the `status` entry:
+   ```ini
+   [global]
+   status = your-radiod-hostname
+   ```
+   
+   **Configure SWL-ka9q to match:**
+   
+   Edit `server.js` line 30:
+   ```javascript
+   const RADIOD_HOSTNAME = process.env.RADIOD_HOSTNAME || 'bee1-hf-status.local';
+   ```
+   
+   Change `'bee1-hf-status.local'` to match your radiod's status hostname:
+   ```javascript
+   const RADIOD_HOSTNAME = process.env.RADIOD_HOSTNAME || '192.168.1.100';
+   ```
+   
+   Or set via environment variable (recommended):
+   ```bash
+   export RADIOD_HOSTNAME=192.168.1.100
+   ```
+
 ## Configuration
 
 ### Server Configuration
@@ -117,6 +145,7 @@ const PORT = 3100;                            // Web server port
 const KA9Q_STATUS_MULTICAST = '239.192.152.141';  // radiod status multicast
 const KA9Q_STATUS_PORT = 5006;                // radiod status port
 const KA9Q_AUDIO_PORT = 5004;                 // RTP audio port
+const RADIOD_HOSTNAME = '192.168.1.100';      // YOUR radiod hostname (REQUIRED)
 ```
 
 ### Updating Broadcast Schedules
@@ -326,9 +355,20 @@ SWL-ka9q/
 
 ### Connection issues
 
-- Confirm the radiod hostname in server.js matches your setup
-- Default is `bee1-hf-status.local` - change if using different hostname
-- Edit the Python script in `startAudioStream()` method
+- **Confirm the radiod hostname is configured correctly**
+  - Find your radiod's status hostname in `/etc/radio/radiod.conf`:
+    ```bash
+    grep "^status" /etc/radio/radiod.conf
+    # Example output: status = bee1-hf-status.local
+    ```
+  - Ensure SWL-ka9q matches this hostname:
+    - Check `server.js` line 30: `RADIOD_HOSTNAME` constant
+    - Or set via environment variable: `export RADIOD_HOSTNAME=bee1-hf-status.local`
+- **Test connectivity:**
+  ```bash
+  ping your-radiod-hostname
+  python3 -c "from ka9q import RadiodControl; c = RadiodControl('your-radiod-hostname'); print('✅ OK')"
+  ```
 
 ## Integration with Other Projects
 
