@@ -14,7 +14,10 @@ import dgram from 'dgram';
 import { EventEmitter } from 'events';
 import { WebSocketServer } from 'ws';
 import { exec } from 'child_process';
+import { promisify } from 'util';
 import https from 'https';
+
+const execAsync = promisify(exec);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -37,6 +40,10 @@ const PYTHON_CMD = fs.existsSync(VENV_PYTHON) ? VENV_PYTHON : 'python3';
 // In-memory station database
 let stations = [];
 let frequencyInfo = new Map();
+
+// Performance: Cache on-air status calculations
+let cachedOnAirMinute = null;
+let cachedActiveStations = [];
 
 /**
  * Ka9q-Radio Audio Proxy
@@ -220,10 +227,8 @@ class Ka9qRadioProxy extends EventEmitter {
     
     console.log(`🎵 Starting stream: ${freqKHz} kHz`);
     
-    return new Promise((resolve, reject) => {
-      // Write Python script to temp file to avoid escaping issues
-      const scriptPath = path.join(__dirname, '.ka9q-stream.py');
-      const pythonScript = `import sys
+    // Performance: Use stdin to pass Python script (properly handles multiline code)
+    const pythonScript = `import sys
 import json
 try:
     from ka9q import RadiodControl, discover_channels
@@ -231,7 +236,6 @@ try:
     control = RadiodControl('${RADIOD_HOSTNAME}')
     
     # Create and configure AM channel (outputs PCM audio)
-    print(f"DEBUG: Creating channel SSRC={${ssrc}}, frequency={${frequency}} Hz", file=sys.stderr)
     control.create_and_configure_channel(
         ssrc=${ssrc},
         frequency_hz=${frequency},
@@ -240,14 +244,10 @@ try:
         agc_enable=1,
         gain=50.0
     )
-    print(f"DEBUG: Channel created successfully", file=sys.stderr)
     
     # Get channel info using native Python discovery (no control executable needed)
     # discover_channels() uses pure Python multicast listener by default
     channels = discover_channels('${RADIOD_HOSTNAME}')
-    
-    # Debug: print all discovered SSRCs and frequencies
-    print(f"DEBUG: Discovered {len(channels)} channels", file=sys.stderr)
     
     # Find channel by frequency instead of SSRC
     found_ssrc = None
@@ -256,10 +256,9 @@ try:
     for ssrc, info in channels.items():
         if abs(info.frequency - target_freq) < 100:  # Within 100 Hz
             found_ssrc = ssrc
-            print(f"DEBUG: Found channel with SSRC={ssrc} tuned to {info.frequency} Hz (requested {target_freq} Hz)", file=sys.stderr)
             result = {
                 'success': True,
-                'ssrc': ssrc,  # Use radiod's SSRC, not our requested one
+                'ssrc': ssrc,
                 'frequency': info.frequency,
                 'multicast_address': info.multicast_address,
                 'multicast_port': info.port,
@@ -268,8 +267,6 @@ try:
             break
     
     if not found_ssrc:
-        print(f"DEBUG: No channel found with frequency {target_freq} Hz", file=sys.stderr)
-        print(f"DEBUG: Available frequencies: {[info.frequency for info in list(channels.values())[:10]]}", file=sys.stderr)
         result = {'success': False, 'error': f'Channel not found for frequency {target_freq} Hz'}
     
     print(json.dumps(result))
@@ -280,66 +277,47 @@ except Exception as e:
     print(json.dumps({'success': False, 'error': str(e)}))
     sys.exit(1)
 `;
+    
+    try {
+      // Async execution using stdin (no temp files, proper multiline support)
+      const { stdout, stderr } = await execAsync(
+        `echo "${pythonScript.replace(/"/g, '\\"')}" | ${PYTHON_CMD}`,
+        { timeout: 10000 }
+      );
       
-      fs.writeFileSync(scriptPath, pythonScript);
+      const result = JSON.parse(stdout.trim());
       
-      exec(`${PYTHON_CMD} ${scriptPath}`, { timeout: 10000 }, (error, stdout, stderr) => {
-        // Clean up temp file
-        try {
-          fs.unlinkSync(scriptPath);
-        } catch (e) {
-          // Ignore cleanup errors
-        }
-        
-        if (error && !stdout) {
-          console.error(`❌ Failed to execute Python script:`, error.message);
-          if (stderr) console.error(`Python stderr: ${stderr}`);
-          reject(new Error(`Python execution failed: ${error.message}${stderr ? '\n' + stderr : ''}`));
-          return;
-        }
-        
-        // Suppress Python stderr debug messages
-        
-        try {
-          const result = JSON.parse(stdout.trim());
-          
-          if (!result.success) {
-            console.error(`❌ Stream request failed: ${result.error}`);
-            if (result.detail) console.error(`Detail: ${result.detail}`);
-            reject(new Error(result.error));
-            return;
-          }
-          
-          if (Math.abs(result.frequency - frequency) > 1) {
-            console.warn(`⚠️ Frequency mismatch! Requested ${frequency} Hz but got ${result.frequency} Hz`);
-          }
-          
-          const stream = {
-            ssrc: result.ssrc,
-            active: true,
-            frequency: result.frequency,
-            multicastAddress: result.multicast_address,
-            multicastPort: result.multicast_port,
-            sampleRate: result.sample_rate
-          };
-          
-          this.activeStreams.set(ssrc, stream);
-          
-          // Join multicast group
-          if (result.multicast_address && !this.joinedMulticastGroups.has(result.multicast_address)) {
-            this.audioSocket.addMembership(result.multicast_address, '0.0.0.0');
-            this.joinedMulticastGroups.add(result.multicast_address);
-          }
-          
-          resolve(stream);
-        } catch (parseError) {
-          console.error(`❌ Failed to parse Python output:`, parseError);
-          console.error(`stdout: ${stdout}`);
-          console.error(`stderr: ${stderr}`);
-          reject(new Error(`Failed to parse Python output: ${parseError.message}`));
-        }
-      });
-    });
+      if (!result.success) {
+        console.error(`❌ Stream request failed: ${result.error}`);
+        throw new Error(result.error);
+      }
+      
+      if (Math.abs(result.frequency - frequency) > 1) {
+        console.warn(`⚠️ Frequency mismatch! Requested ${frequency} Hz but got ${result.frequency} Hz`);
+      }
+      
+      const stream = {
+        ssrc: result.ssrc,
+        active: true,
+        frequency: result.frequency,
+        multicastAddress: result.multicast_address,
+        multicastPort: result.multicast_port,
+        sampleRate: result.sample_rate
+      };
+      
+      this.activeStreams.set(ssrc, stream);
+      
+      // Join multicast group
+      if (result.multicast_address && !this.joinedMulticastGroups.has(result.multicast_address)) {
+        this.audioSocket.addMembership(result.multicast_address, '0.0.0.0');
+        this.joinedMulticastGroups.add(result.multicast_address);
+      }
+      
+      return stream;
+    } catch (error) {
+      console.error(`❌ Failed to start audio stream:`, error.message);
+      throw error;
+    }
   }
   
   async stopAudioStream(ssrc) {
@@ -350,43 +328,16 @@ except Exception as e:
       
       // Delete channel from radiod by setting frequency to 0 Hz
       try {
-        const scriptPath = path.join(__dirname, '.ka9q-stream-stop.py');
         const pythonScript = `import sys
 import json
-try:
-    from ka9q import RadiodControl
-    
-    control = RadiodControl('${RADIOD_HOSTNAME}')
-    
-    # Set frequency to 0 Hz to delete the channel
-    control.set_frequency(${ssrc}, 0)
-    
-    print(json.dumps({
-        'success': True,
-        'ssrc': ${ssrc}
-    }))
-except Exception as e:
-    print(json.dumps({
-        'success': False,
-        'error': str(e)
-    }), file=sys.stderr)
-    sys.exit(1)
-`;
+from ka9q import RadiodControl
+control = RadiodControl('${RADIOD_HOSTNAME}')
+control.set_frequency(${ssrc}, 0)
+print(json.dumps({'success': True, 'ssrc': ${ssrc}}))`;
         
-        fs.writeFileSync(scriptPath, pythonScript);
-        
-        exec(`${PYTHON_CMD} ${scriptPath}`, (error, stdout, stderr) => {
-          // Clean up temp file
-          try {
-            fs.unlinkSync(scriptPath);
-          } catch (err) {
-            // Ignore cleanup errors
-          }
-          
-          if (error) {
-            console.error(`❌ Failed to delete channel ${ssrc}:`, error.message);
-          }
-        });
+        // Async execution using stdin
+        await execAsync(`echo "${pythonScript.replace(/"/g, '\\"')}" | ${PYTHON_CMD}`, { timeout: 5000 });
+        console.log(`✅ Channel ${ssrc} deleted`);
       } catch (err) {
         console.error(`❌ Error deleting channel ${ssrc}:`, err.message);
       }
@@ -415,73 +366,31 @@ except Exception as e:
   }
 
   async executeTuningCommand(ssrc, command) {
-    return new Promise((resolve, reject) => {
-      const scriptPath = path.join(__dirname, '.ka9q-tune.py');
+    try {
       const pythonScript = `import sys
 import json
-try:
-    from ka9q import RadiodControl
-    
-    control = RadiodControl('${RADIOD_HOSTNAME}')
-    ${command}
-    
-    print(json.dumps({'success': True, 'ssrc': ${ssrc}}))
-except Exception as e:
-    import traceback
-    print(json.dumps({
-        'success': False,
-        'error': str(e),
-        'traceback': traceback.format_exc()
-    }), file=sys.stderr)
-    sys.exit(1)
-`;
+from ka9q import RadiodControl
+control = RadiodControl('${RADIOD_HOSTNAME}')
+${command}
+print(json.dumps({'success': True, 'ssrc': ${ssrc}}))`;
       
-      fs.writeFileSync(scriptPath, pythonScript);
+      // Async execution using stdin
+      const { stdout, stderr } = await execAsync(
+        `echo "${pythonScript.replace(/"/g, '\\"')}" | ${PYTHON_CMD}`,
+        { timeout: 5000 }
+      );
       
-      exec(`${PYTHON_CMD} ${scriptPath}`, (error, stdout, stderr) => {
-        // Clean up temp file
-        try {
-          fs.unlinkSync(scriptPath);
-        } catch (err) {
-          // Ignore cleanup errors
-        }
-        
-        if (error) {
-          console.error(`❌ Tuning command failed for SSRC ${ssrc}:`, error.message);
-          if (stderr) console.error('Python stderr:', stderr);
-          reject(new Error(`Tuning command failed: ${error.message}`));
-          return;
-        }
-        
-        if (stderr) {
-          try {
-            const errorData = JSON.parse(stderr.trim());
-            console.error(`❌ Python error for SSRC ${ssrc}:`, errorData.error);
-            if (errorData.traceback) console.error('Traceback:', errorData.traceback);
-            reject(new Error(errorData.error || 'Unknown error'));
-            return;
-          } catch (e) {
-            // stderr is not JSON, log it anyway
-            console.error('Python stderr:', stderr);
-          }
-        }
-        
-        try {
-          const result = JSON.parse(stdout.trim());
-          if (result.success) {
-            console.log(`✅ Tuning command succeeded for SSRC ${ssrc}`);
-            resolve(result);
-          } else {
-            console.error(`❌ Tuning failed for SSRC ${ssrc}:`, result.error);
-            reject(new Error(result.error || 'Unknown error'));
-          }
-        } catch (parseError) {
-          console.error(`❌ Failed to parse Python output for SSRC ${ssrc}:`, parseError.message);
-          console.error('stdout:', stdout);
-          reject(new Error(`Failed to parse response: ${parseError.message}`));
-        }
-      });
-    });
+      const result = JSON.parse(stdout.trim());
+      if (result.success) {
+        console.log(`✅ Tuning command succeeded for SSRC ${ssrc}`);
+        return result;
+      } else {
+        throw new Error(result.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error(`❌ Tuning command failed for SSRC ${ssrc}:`, error.message);
+      throw error;
+    }
   }
 
   shutdown() {
@@ -678,8 +587,18 @@ function isOnAir(schedule) {
 
 /**
  * Get currently active stations
+ * Performance: Cache results per minute to avoid redundant calculations
  */
 function getActiveStations() {
+  const now = new Date();
+  const currentMinute = now.getUTCHours() * 60 + now.getUTCMinutes();
+  
+  // Return cached results if still valid for this minute
+  if (currentMinute === cachedOnAirMinute && cachedActiveStations.length > 0) {
+    return cachedActiveStations;
+  }
+  
+  // Recalculate and cache
   const active = [];
   
   for (const schedule of stations) {
@@ -693,6 +612,9 @@ function getActiveStations() {
       });
     }
   }
+  
+  cachedOnAirMinute = currentMinute;
+  cachedActiveStations = active;
   
   return active;
 }
@@ -861,6 +783,10 @@ async function loadSchedules() {
   for (const schedules of stationMap.values()) {
     stations.push(...schedules);
   }
+  
+  // Performance: Invalidate cache when schedules change
+  cachedOnAirMinute = null;
+  cachedActiveStations = [];
   
   console.log(`✅ Loaded ${stations.length} total station entries`);
   console.log(`   - ${timeSchedules.length} scheduled broadcasts`);
@@ -1053,32 +979,17 @@ app.get('/api/audio/health', async (req, res) => {
   let pythonError = null;
   
   try {
-    const testScript = `
-import sys
+    const pythonScript = `import sys
 import json
-try:
-    from ka9q import RadiodControl
-    print(json.dumps({'success': True, 'message': 'ka9q package available'}))
-except ImportError as e:
-    print(json.dumps({'success': False, 'error': 'ka9q package not installed: ' + str(e)}))
-except Exception as e:
-    print(json.dumps({'success': False, 'error': str(e)}))
-`;
+from ka9q import RadiodControl
+print(json.dumps({'success': True, 'message': 'ka9q package available'}))`;
     
-    const result = await new Promise((resolve) => {
-      exec(`${PYTHON_CMD} -c "${testScript.replace(/"/g, '\\"')}"`, { timeout: 5000 }, (error, stdout, stderr) => {
-        if (error) {
-          resolve({ success: false, error: error.message, stderr });
-        } else {
-          try {
-            resolve(JSON.parse(stdout.trim()));
-          } catch (e) {
-            resolve({ success: false, error: 'Failed to parse output', stdout, stderr });
-          }
-        }
-      });
-    });
+    const { stdout } = await execAsync(
+      `echo "${pythonScript.replace(/"/g, '\\"')}" | ${PYTHON_CMD}`,
+      { timeout: 5000 }
+    );
     
+    const result = JSON.parse(stdout.trim());
     pythonStatus = result.success ? 'ok' : 'error';
     pythonError = result.error || null;
   } catch (e) {
@@ -1177,8 +1088,26 @@ async function startServer() {
     });
   });
   
-  // Reload schedules every 5 minutes
-  setInterval(loadSchedules, 5 * 60 * 1000);
+  // Performance: Watch for schedule file changes instead of polling
+  // This eliminates unnecessary file I/O and parsing
+  let reloadDebounce = null;
+  const scheduleWatcher = fs.watch(TIME_SCHEDULE_FILE, (eventType) => {
+    if (eventType === 'change') {
+      // Debounce to avoid multiple rapid reloads
+      if (reloadDebounce) clearTimeout(reloadDebounce);
+      reloadDebounce = setTimeout(() => {
+        console.log('📝 Schedule file changed, reloading...');
+        loadSchedules();
+      }, 1000);
+    }
+  });
+  
+  // Also check for new_schedule.txt every 5 minutes (for manual updates)
+  setInterval(() => {
+    if (fs.existsSync(NEW_SCHEDULE_FILE)) {
+      loadSchedules();
+    }
+  }, 5 * 60 * 1000);
 }
 
 startServer();
