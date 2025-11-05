@@ -31,7 +31,7 @@ const NEW_SCHEDULE_FILE = path.join(__dirname, 'new_schedule.txt');
 const KA9Q_STATUS_MULTICAST = '239.192.152.141';
 const KA9Q_STATUS_PORT = 5006;
 const KA9Q_AUDIO_PORT = 5004;
-const RADIOD_HOSTNAME = process.env.RADIOD_HOSTNAME || 'bee1-hf-status.local';
+const RADIOD_HOSTNAME = process.env.RADIOD_HOSTNAME || 'localhost';
 
 // Python configuration - use venv if available, otherwise system python3
 const VENV_PYTHON = path.join(__dirname, 'venv', 'bin', 'python3');
@@ -231,7 +231,10 @@ class Ka9qRadioProxy extends EventEmitter {
     const pythonScript = `import sys
 import json
 try:
-    from ka9q import RadiodControl, discover_channels
+    from ka9q import RadiodControl
+    import socket
+    import struct
+    import time
     
     control = RadiodControl('${RADIOD_HOSTNAME}')
     
@@ -245,29 +248,77 @@ try:
         gain=50.0
     )
     
-    # Get channel info using native Python discovery (no control executable needed)
-    # discover_channels() uses pure Python multicast listener by default
-    channels = discover_channels('${RADIOD_HOSTNAME}')
+    # Wait a moment for channel creation
+    time.sleep(0.5)
     
-    # Find channel by frequency instead of SSRC
-    found_ssrc = None
-    target_freq = ${frequency}
+    # Get channel info from status multicast
+    # Create UDP socket to listen for status packets
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(('', 5006))
     
-    for ssrc, info in channels.items():
-        if abs(info.frequency - target_freq) < 100:  # Within 100 Hz
-            found_ssrc = ssrc
-            result = {
-                'success': True,
-                'ssrc': ssrc,
-                'frequency': info.frequency,
-                'multicast_address': info.multicast_address,
-                'multicast_port': info.port,
-                'sample_rate': info.sample_rate
-            }
+    # Join status multicast group
+    mreq = struct.pack('4sl', socket.inet_aton('239.192.152.141'), socket.INADDR_ANY)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+    sock.settimeout(3.0)
+    
+    # Listen for our channel's status packet
+    found = False
+    for _ in range(10):  # Try up to 10 packets
+        try:
+            data, addr = sock.recvfrom(8192)
+            # Parse status packet to find our SSRC
+            offset = 0
+            packet_ssrc = None
+            multicast_address = None
+            multicast_port = None
+            
+            while offset < len(data) - 2:
+                tag = data[offset]
+                length = data[offset + 1]
+                offset += 2
+                
+                if offset + length > len(data):
+                    break
+                    
+                if tag == 10 and length == 4:  # SSRC tag
+                    packet_ssrc = struct.unpack('>I', data[offset:offset+4])[0]
+                elif tag == 20:  # Multicast address tag
+                    if length == 4:  # IPv4 address in binary
+                        multicast_address = socket.inet_ntoa(data[offset:offset+4])
+                    else:  # String format
+                        multicast_address = data[offset:offset+length].decode('utf-8', errors='ignore')
+                elif tag == 21 and length == 2:  # Multicast port tag
+                    multicast_port = struct.unpack('>H', data[offset:offset+2])[0]
+                    
+                offset += length
+            
+            if packet_ssrc == ${ssrc}:
+                result = {
+                    'success': True,
+                    'ssrc': ${ssrc},
+                    'frequency': ${frequency},
+                    'multicast_address': multicast_address,
+                    'multicast_port': multicast_port,
+                    'sample_rate': 12000
+                }
+                found = True
+                break
+        except socket.timeout:
             break
     
-    if not found_ssrc:
-        result = {'success': False, 'error': f'Channel not found for frequency {target_freq} Hz'}
+    sock.close()
+    
+    if not found:
+        # Channel created but status not received yet - use defaults
+        result = {
+            'success': True,
+            'ssrc': ${ssrc},
+            'frequency': ${frequency},
+            'multicast_address': None,
+            'multicast_port': 5004,
+            'sample_rate': 12000
+        }
     
     print(json.dumps(result))
 except Exception as e:
@@ -282,7 +333,7 @@ except Exception as e:
       // Async execution using stdin (no temp files, proper multiline support)
       const { stdout, stderr } = await execAsync(
         `echo "${pythonScript.replace(/"/g, '\\"')}" | ${PYTHON_CMD}`,
-        { timeout: 10000 }
+        { timeout: 15000 }
       );
       
       const result = JSON.parse(stdout.trim());

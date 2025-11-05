@@ -26,53 +26,30 @@ pnpm install
 # or: npm install
 ```
 
-## Configuration (Required Before First Start)
+## Configuration (Optional - Only for Remote Radiod)
 
-### Set Your Radiod Hostname
+### ✅ Default: No Configuration Needed!
 
-**⚠️ IMPORTANT:** You must configure the radiod hostname before starting the server.
+If radiod is running **on the same machine**, you're done! The default is `localhost`.
 
-**Find your radiod hostname:**
-Look in your radiod configuration file (usually `/etc/radio/radiod.conf`) in the `[global]` section for the `status` entry:
-```ini
-[global]
-status = your-radiod-hostname
-```
+### 🌐 Remote Radiod Setup
 
-This hostname is what SWL-ka9q needs to connect to radiod.
+**Only if radiod is on a different machine:**
 
-**Configure SWL-ka9q:**
-
-Edit `server.js` line 30:
-```javascript
-const RADIOD_HOSTNAME = process.env.RADIOD_HOSTNAME || 'bee1-hf-status.local';
-```
-
-**Change `'bee1-hf-status.local'` to match your radiod's status hostname:**
-
-```javascript
-// Example with hostname from radiod.conf
-const RADIOD_HOSTNAME = process.env.RADIOD_HOSTNAME || 'my-radiod-server.local';
-
-// Example with IP address
-const RADIOD_HOSTNAME = process.env.RADIOD_HOSTNAME || '192.168.1.100';
-```
-
-**Or use an environment variable (recommended):**
 ```bash
+# Set environment variable to remote radiod IP:
 export RADIOD_HOSTNAME=192.168.1.100
-# Add to ~/.bashrc or ~/.zshrc to make permanent
+
+# Or add to ~/.bashrc for permanent:
+echo 'export RADIOD_HOSTNAME=192.168.1.100' >> ~/.bashrc
 ```
 
-### Verify Radiod Connection
+### Verify Connection (Optional)
 
-Test that you can reach radiod before starting:
+Test radiod connectivity:
 ```bash
-# Test with ping
-ping your-radiod-hostname
-
-# Test with Python
-python3 -c "from ka9q import RadiodControl; c = RadiodControl('your-radiod-hostname'); print('✅ Connected')"
+# Test with Python ka9q package
+python3 -c "from ka9q import RadiodControl; c = RadiodControl('${RADIOD_HOSTNAME:-localhost}'); print('✅ Connected')"
 ```
 
 ## Start the Server

@@ -80,8 +80,9 @@ A web-based interface for monitoring shortwave broadcast stations with live audi
 
 - **Node.js** >= 16.0.0
 - **ka9q-radio** (radiod running and accessible)
-- **Python 3** with ka9q-python package installed:
+- **Python 3** with **ka9q-python** package (custom package, not on PyPI):
   ```bash
+  # Installed automatically by setup-venv.sh, or manually:
   pip3 install git+https://github.com/mijahauan/ka9q-python.git
   ```
 
@@ -107,7 +108,7 @@ A web-based interface for monitoring shortwave broadcast stations with live audi
    ```bash
    ./setup-venv.sh
    ```
-   This creates a `venv/` directory and installs ka9q-python from GitHub.
+   This creates a `venv/` directory and installs the **custom ka9q-python package from GitHub** (not available on PyPI).
 
 3. **Install Node.js dependencies:**
    ```bash
@@ -123,33 +124,18 @@ A web-based interface for monitoring shortwave broadcast stations with live audi
    - Files are ready to use, or customize with your own schedules
    - **Auto-download:** If `bc-time.txt` is missing, the server automatically downloads the latest EiBi schedule on first run
 
-5. **Configure radiod hostname (REQUIRED):**
+5. **Configure radiod hostname (if needed):**
    
-   **⚠️ You must set your radiod hostname before starting the server.**
+   **Default:** Works out-of-the-box if radiod is on the same machine (uses `localhost`)
    
-   **Find your radiod hostname:**
-   Check your radiod configuration file (usually `/etc/radio/radiod.conf`) in the `[global]` section for the `status` entry:
-   ```ini
-   [global]
-   status = your-radiod-hostname
-   ```
-   
-   **Configure SWL-ka9q to match:**
-   
-   Edit `server.js` line 30:
-   ```javascript
-   const RADIOD_HOSTNAME = process.env.RADIOD_HOSTNAME || 'bee1-hf-status.local';
-   ```
-   
-   Change `'bee1-hf-status.local'` to match your radiod's status hostname:
-   ```javascript
-   const RADIOD_HOSTNAME = process.env.RADIOD_HOSTNAME || '192.168.1.100';
-   ```
-   
-   Or set via environment variable (recommended):
+   **Only configure if radiod is on a different machine:**
    ```bash
+   # Set hostname to remote radiod IP:
    export RADIOD_HOSTNAME=192.168.1.100
+   npm start
    ```
+   
+   **See [CONFIGURATION.md](CONFIGURATION.md) for detailed remote setup.**
 
 ## Configuration
 
