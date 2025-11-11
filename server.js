@@ -239,13 +239,14 @@ try:
     control = RadiodControl('${RADIOD_HOSTNAME}')
     
     # Create and configure AM channel (outputs PCM audio)
+    # AGC is disabled to allow manual gain control from the web UI
     control.create_and_configure_channel(
         ssrc=${ssrc},
         frequency_hz=${frequency},
         preset='am',
         sample_rate=12000,
-        agc_enable=1,
-        gain=50.0
+        agc_enable=0,
+        gain=30.0
     )
     
     # Wait a moment for channel creation
@@ -397,33 +398,44 @@ print(json.dumps({'success': True, 'ssrc': ${ssrc}}))`;
 
   async setAGC(ssrc, enable, hangtime, headroom) {
     const enablePython = enable ? 'True' : 'False';
-    return this.executeTuningCommand(ssrc, `control.set_agc(${ssrc}, ${enablePython}, hangtime=${hangtime}, headroom=${headroom})`);
+    return this.executeTuningCommand(ssrc, `control.set_agc(ssrc=${ssrc}, enable=${enablePython}, hangtime=${hangtime}, headroom=${headroom})`);
   }
 
   async setGain(ssrc, gain_db) {
-    return this.executeTuningCommand(ssrc, `control.set_gain(${ssrc}, ${gain_db})`);
+    return this.executeTuningCommand(ssrc, `control.set_gain(ssrc=${ssrc}, gain_db=${gain_db})`);
   }
 
   async setFilter(ssrc, low_edge, high_edge) {
-    return this.executeTuningCommand(ssrc, `control.set_filter(${ssrc}, low_edge=${low_edge}, high_edge=${high_edge})`);
+    return this.executeTuningCommand(ssrc, `control.set_filter(ssrc=${ssrc}, low_edge=${low_edge}, high_edge=${high_edge})`);
+  }
+
+  async setFrequency(ssrc, frequency_hz) {
+    return this.executeTuningCommand(ssrc, `control.set_frequency(ssrc=${ssrc}, frequency_hz=${frequency_hz})`);
   }
 
   async setShift(ssrc, shift_hz) {
-    return this.executeTuningCommand(ssrc, `control.set_shift_frequency(${ssrc}, ${shift_hz})`);
+    return this.executeTuningCommand(ssrc, `control.set_shift_frequency(ssrc=${ssrc}, shift_hz=${shift_hz})`);
   }
 
   async setOutputLevel(ssrc, level) {
-    return this.executeTuningCommand(ssrc, `control.set_output_level(${ssrc}, ${level})`);
+    return this.executeTuningCommand(ssrc, `control.set_output_level(ssrc=${ssrc}, level=${level})`);
   }
 
   async executeTuningCommand(ssrc, command) {
     try {
       const pythonScript = `import sys
 import json
-from ka9q import RadiodControl
-control = RadiodControl('${RADIOD_HOSTNAME}')
-${command}
-print(json.dumps({'success': True, 'ssrc': ${ssrc}}))`;
+try:
+    from ka9q import RadiodControl
+    control = RadiodControl('${RADIOD_HOSTNAME}')
+    ${command}
+    print(json.dumps({'success': True, 'ssrc': ${ssrc}}))
+except Exception as e:
+    import traceback
+    error_detail = traceback.format_exc()
+    print(json.dumps({'success': False, 'error': str(e), 'detail': error_detail}), file=sys.stderr)
+    print(json.dumps({'success': False, 'error': str(e)}))
+    sys.exit(1)`;
       
       // Async execution using stdin
       const { stdout, stderr } = await execAsync(
@@ -431,11 +443,17 @@ print(json.dumps({'success': True, 'ssrc': ${ssrc}}))`;
         { timeout: 5000 }
       );
       
+      // Log stderr if present for debugging
+      if (stderr && stderr.trim()) {
+        console.error(`⚠️ Python stderr for SSRC ${ssrc}:`, stderr.trim());
+      }
+      
       const result = JSON.parse(stdout.trim());
       if (result.success) {
-        console.log(`✅ Tuning command succeeded for SSRC ${ssrc}`);
+        console.log(`✅ Tuning command succeeded for SSRC ${ssrc}: ${command}`);
         return result;
       } else {
+        console.error(`❌ Tuning command returned error:`, result.error);
         throw new Error(result.error || 'Unknown error');
       }
     } catch (error) {
@@ -974,6 +992,7 @@ app.post('/api/audio/tune/:ssrc/gain', async (req, res) => {
     const ssrc = parseInt(req.params.ssrc);
     const { gain_db } = req.body;
     
+    console.log(`🎚️ Gain adjustment request: SSRC ${ssrc}, gain ${gain_db} dB`);
     await radioProxy.setGain(ssrc, gain_db);
     res.json({ success: true });
   } catch (error) {
@@ -987,6 +1006,19 @@ app.post('/api/audio/tune/:ssrc/filter', async (req, res) => {
     const { low_edge, high_edge } = req.body;
     
     await radioProxy.setFilter(ssrc, low_edge, high_edge);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/audio/tune/:ssrc/frequency', async (req, res) => {
+  try {
+    const ssrc = parseInt(req.params.ssrc);
+    const { frequency_hz } = req.body;
+    
+    console.log(`📻 Frequency change request: SSRC ${ssrc}, frequency ${frequency_hz} Hz`);
+    await radioProxy.setFrequency(ssrc, frequency_hz);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

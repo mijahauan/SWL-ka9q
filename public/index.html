@@ -138,9 +138,21 @@
                 </div>
             </div>
 
+            <!-- Main Frequency -->
+            <div class="tuning-section">
+                <h4>Frequency</h4>
+                <div class="tuning-control">
+                    <label>
+                        Frequency (kHz):
+                        <input type="number" id="main-freq" value="0" step="5" onchange="updateFrequency(this.value)">
+                    </label>
+                    <small>Change the main tuning frequency</small>
+                </div>
+            </div>
+
             <!-- Shift Frequency -->
             <div class="tuning-section">
-                <h4>Frequency Shift</h4>
+                <h4>Fine Tuning (Shift)</h4>
                 <div class="tuning-control">
                     <label>
                         Shift (Hz):

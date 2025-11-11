@@ -23,6 +23,7 @@ bc-freq.backup.*.txt
 .env
 .env.local
 .env.*.local
+.radiod-hostname
 
 # Logs
 logs/

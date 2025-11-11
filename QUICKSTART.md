@@ -26,37 +26,32 @@ pnpm install
 # or: npm install
 ```
 
-## Configuration (Optional - Only for Remote Radiod)
-
-### ✅ Default: No Configuration Needed!
-
-If radiod is running **on the same machine**, you're done! The default is `localhost`.
-
-### 🌐 Remote Radiod Setup
-
-**Only if radiod is on a different machine:**
-
-```bash
-# Set environment variable to remote radiod IP:
-export RADIOD_HOSTNAME=192.168.1.100
-
-# Or add to ~/.bashrc for permanent:
-echo 'export RADIOD_HOSTNAME=192.168.1.100' >> ~/.bashrc
-```
-
-### Verify Connection (Optional)
-
-Test radiod connectivity:
-```bash
-# Test with Python ka9q package
-python3 -c "from ka9q import RadiodControl; c = RadiodControl('${RADIOD_HOSTNAME:-localhost}'); print('✅ Connected')"
-```
-
 ## Start the Server
 
+The server will prompt you for the radiod hostname on first run:
+
 ```bash
-pnpm start
-# or: npm start
+npm start
+```
+
+**You'll be asked to enter the radiod status stream hostname:**
+- For local radiod: `localhost` (default)
+- For remote radiod by hostname: `bee1-hf-status.local`
+- For remote radiod by IP: `192.168.1.100`
+
+Your choice is saved to `.radiod-hostname` and used for future runs.
+
+### Alternative: Manual Configuration
+
+If you prefer to set the hostname via environment variable:
+
+```bash
+# Set environment variable to remote radiod:
+export RADIOD_HOSTNAME=bee1-hf-status.local
+npm run start-direct
+
+# Or add to ~/.bashrc for permanent:
+echo 'export RADIOD_HOSTNAME=bee1-hf-status.local' >> ~/.bashrc
 ```
 
 **Note:** If `bc-time.txt` is missing, the server will automatically download the latest EiBi broadcast schedule on first run.

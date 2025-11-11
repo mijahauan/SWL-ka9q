@@ -624,11 +624,12 @@ function openTuningPanel(ssrc, station) {
     panel.style.display = 'block';
     
     // Reset to defaults
-    document.getElementById('agc-enable').checked = true;
-    document.getElementById('manual-gain').value = 0;
-    document.getElementById('manual-gain-value').textContent = '0';
+    document.getElementById('agc-enable').checked = false; // AGC disabled by default
+    document.getElementById('manual-gain').value = 30;
+    document.getElementById('manual-gain-value').textContent = '30';
     document.getElementById('filter-low').value = -5000;
     document.getElementById('filter-high').value = 5000;
+    document.getElementById('main-freq').value = (station.frequency / 1000).toFixed(1); // Set current frequency in kHz
     document.getElementById('shift-freq').value = 0;
     document.getElementById('output-level').value = 0.5;
     document.getElementById('output-level-value').textContent = '0.50';
@@ -748,6 +749,33 @@ async function updateFilter() {
         }
     } catch (error) {
         console.error('❌ Error updating filter:', error);
+    }
+}
+
+/**
+ * Update main frequency
+ */
+async function updateFrequency(value) {
+    if (!currentTuningSSRC) return;
+    
+    const frequencyHz = parseFloat(value) * 1000; // Convert kHz to Hz
+    console.log(`📻 Updating frequency for SSRC ${currentTuningSSRC}: ${value} kHz (${frequencyHz} Hz)`);
+    
+    try {
+        const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/frequency`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ frequency_hz: frequencyHz })
+        });
+        
+        const data = await response.json();
+        if (!response.ok) {
+            console.error('❌ Failed to update frequency:', data);
+        } else {
+            console.log('✅ Frequency updated successfully');
+        }
+    } catch (error) {
+        console.error('❌ Error updating frequency:', error);
     }
 }
 

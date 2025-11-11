@@ -5,7 +5,8 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
+    "start": "./start.sh",
+    "start-direct": "node server.js",
     "dev": "nodemon server.js",
     "setup": "./setup-venv.sh && npm install",
     "test": "echo \"Error: no test specified\" && exit 1"
