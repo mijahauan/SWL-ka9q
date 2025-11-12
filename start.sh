@@ -52,6 +52,13 @@ echo ""
 echo -e "${BLUE}📻 Starting server with radiod hostname: ${RADIOD_HOSTNAME}${NC}"
 echo ""
 
+# Check for schedule updates
+if [ -f "auto-update-schedule.sh" ]; then
+    echo "Checking for schedule updates..."
+    ./auto-update-schedule.sh --quiet
+    echo ""
+fi
+
 # Test connection first (optional)
 if command -v venv/bin/python3 &> /dev/null; then
     echo "Testing connection to radiod..."

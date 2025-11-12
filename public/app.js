@@ -8,6 +8,7 @@ let frequencyData = [];
 let activeAudioSessions = new Map();
 let currentBandFilter = null;
 let currentView = 'time'; // 'time' or 'frequency'
+let displayMode = 'table'; // 'table' or 'cards'
 
 /**
  * Audio Session Manager
@@ -215,11 +216,22 @@ function switchTab(view) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     event.target.classList.add('active');
     
-    // Update info text
-    const infoText = view === 'time' 
-        ? '📅 Organized by broadcast schedule • Green = On-air now'
-        : '📡 Organized by frequency • Shows all time slots per frequency';
-    document.getElementById('view-info').textContent = infoText;
+    renderStations();
+}
+
+/**
+ * Switch between table and card display modes
+ */
+function switchDisplay(mode) {
+    displayMode = mode;
+    
+    // Update toggle buttons
+    document.querySelectorAll('.toggle-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`toggle-${mode}`).classList.add('active');
+    
+    // Update container class
+    const container = document.getElementById('stations-container');
+    container.className = mode === 'table' ? 'stations-table' : 'stations-grid';
     
     renderStations();
 }
@@ -277,8 +289,12 @@ function renderTimeView() {
         return;
     }
     
-    // Render cards
-    container.innerHTML = filteredStations.map(station => createStationCard(station)).join('');
+    // Render based on display mode
+    if (displayMode === 'table') {
+        container.innerHTML = createStationsTable(filteredStations);
+    } else {
+        container.innerHTML = filteredStations.map(station => createStationCard(station)).join('');
+    }
     
     updateStats();
 }
@@ -325,8 +341,12 @@ function renderFrequencyView() {
         return;
     }
     
-    // Render cards
-    container.innerHTML = filteredFreqs.map(freq => createFrequencyCard(freq)).join('');
+    // Render based on display mode
+    if (displayMode === 'table') {
+        container.innerHTML = createFrequenciesTable(filteredFreqs);
+    } else {
+        container.innerHTML = filteredFreqs.map(freq => createFrequencyCard(freq)).join('');
+    }
     
     updateStats();
 }
@@ -455,6 +475,127 @@ function createStationCard(station) {
                 ${isListening ? `<button class="btn-tune" onclick="openTuningPanel(${station.frequency}, ${JSON.stringify(station).replace(/"/g, '&quot;')})">🎛️ Tune</button>` : ''}
             </div>
         </div>
+    `;
+}
+
+/**
+ * Create compact table view for stations
+ */
+function createStationsTable(stations) {
+    return `
+        <table>
+            <thead>
+                <tr>
+                    <th>Freq (kHz)</th>
+                    <th>Station</th>
+                    <th>Time (UTC)</th>
+                    <th>Language</th>
+                    <th>Target</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${stations.map(station => createStationRow(station)).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+/**
+ * Create a single table row for a station
+ */
+function createStationRow(station) {
+    const isListening = activeAudioSessions.has(station.frequency);
+    const rowClass = `${station.onAir ? 'on-air' : 'off-air'} ${isListening ? 'listening' : ''}`;
+    const freqKHz = (station.frequency / 1000).toFixed(0);
+    
+    return `
+        <tr class="${rowClass}" data-frequency="${station.frequency}">
+            <td>${freqKHz}</td>
+            <td><strong>${station.station}</strong></td>
+            <td>${station.time}</td>
+            <td>${station.language || 'N/A'}</td>
+            <td>${station.target || 'N/A'}</td>
+            <td>
+                <span class="table-status ${station.onAir ? 'on-air' : 'off-air'}">
+                    ${station.onAir ? '🔴 LIVE' : '⚫ OFF'}
+                </span>
+            </td>
+            <td>
+                <div class="table-actions">
+                    <button 
+                        class="table-btn ${isListening ? 'stop' : 'play'}" 
+                        onclick="toggleAudio(${station.frequency})"
+                        ${!station.onAir && !isListening ? 'disabled' : ''}
+                    >
+                        ${isListening ? '⏹️ Stop' : '▶️ Play'}
+                    </button>
+                    ${isListening ? `<button class="table-btn tune" onclick="openTuningPanel(${station.frequency}, ${JSON.stringify(station).replace(/"/g, '&quot;')})">🎛️</button>` : ''}
+                </div>
+            </td>
+        </tr>
+    `;
+}
+
+/**
+ * Create compact table view for frequencies
+ */
+function createFrequenciesTable(frequencies) {
+    return `
+        <table>
+            <thead>
+                <tr>
+                    <th>Freq (kHz)</th>
+                    <th>Station</th>
+                    <th>Schedules</th>
+                    <th>Location</th>
+                    <th>Power</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${frequencies.map(freq => createFrequencyRow(freq)).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+/**
+ * Create a single table row for a frequency
+ */
+function createFrequencyRow(freq) {
+    const isListening = activeAudioSessions.has(freq.frequency);
+    const rowClass = `${freq.onAir ? 'on-air' : 'off-air'} ${isListening ? 'listening' : ''}`;
+    const freqKHz = (freq.frequency / 1000).toFixed(0);
+    const scheduleCount = freq.schedules ? freq.schedules.length : 0;
+    
+    return `
+        <tr class="${rowClass}" data-frequency="${freq.frequency}">
+            <td>${freqKHz}</td>
+            <td><strong>${freq.station || 'Multiple'}</strong></td>
+            <td>${scheduleCount} broadcast${scheduleCount !== 1 ? 's' : ''}</td>
+            <td>${freq.location || 'N/A'}</td>
+            <td>${freq.power || 'N/A'} kW</td>
+            <td>
+                <span class="table-status ${freq.onAir ? 'on-air' : 'off-air'}">
+                    ${freq.onAir ? '🔴 LIVE' : '⚫ OFF'}
+                </span>
+            </td>
+            <td>
+                <div class="table-actions">
+                    <button 
+                        class="table-btn ${isListening ? 'stop' : 'play'}" 
+                        onclick="toggleAudio(${freq.frequency})"
+                        ${!freq.onAir && !isListening ? 'disabled' : ''}
+                    >
+                        ${isListening ? '⏹️ Stop' : '▶️ Play'}
+                    </button>
+                    ${isListening ? `<button class="table-btn tune" onclick="openTuningPanel(${freq.frequency}, ${JSON.stringify(freq).replace(/"/g, '&quot;')})">🎛️</button>` : ''}
+                </div>
+            </td>
+        </tr>
     `;
 }
 

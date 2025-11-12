@@ -163,12 +163,28 @@ const RADIOD_HOSTNAME = '192.168.1.100';      // YOUR radiod hostname (REQUIRED)
 - **A-season** (late March): Spring/Summer schedules
 - **B-season** (late October): Fall/Winter schedules
 
-**Automatic Update Method:**
+**Automatic Update (Recommended):**
 
-1. **Download the latest schedule:**
+The server now automatically checks for and downloads schedule updates:
+
+1. **On startup** - Checks if schedule is current
+2. **Smart detection** - Determines current season automatically (A/B schedule)
+3. **Age-based updates** - Updates if schedule is older than 14 days
+4. **Seamless application** - Server applies updates automatically
+
+You can also manually trigger an update check:
+```bash
+./auto-update-schedule.sh
+```
+
+**Manual Update Method:**
+
+If you prefer manual control or need a specific schedule:
+
+1. **Interactive download:**
    ```bash
    ./update-schedule.sh
-   # Then enter: sked-b25.txt (or current season)
+   # Then enter: sked-b25.txt (or desired season)
    ```
 
 2. **The server automatically detects and applies the update:**
@@ -177,7 +193,7 @@ const RADIOD_HOSTNAME = '192.168.1.100';      // YOUR radiod hostname (REQUIRED)
    - Replaces `bc-time.txt` with new schedule
    - Reloads station data automatically
 
-**Manual Update Method:**
+**Alternative Manual Method:**
 
 1. **Download from EiBi:**
    ```bash
@@ -352,24 +368,25 @@ The client-side JavaScript:
 
 ```
 SWL-ka9q/
-├── server.js              # Node.js backend server
-├── package.json           # Node.js dependencies
-├── start.sh               # Interactive startup script (prompts for hostname)
-├── setup-venv.sh          # Python venv setup script
-├── update-schedule.sh     # EiBi schedule updater helper
-├── bc-time.txt            # EiBi time-based schedules (7337 entries)
-├── bc-freq.txt            # Frequency database (1482 entries)
-├── .radiod-hostname       # Saved radiod hostname (created by start.sh)
+├── server.js                 # Node.js backend server
+├── package.json              # Node.js dependencies
+├── start.sh                  # Interactive startup script (prompts for hostname)
+├── setup-venv.sh             # Python venv setup script
+├── auto-update-schedule.sh   # Automatic schedule updater (runs on startup)
+├── update-schedule.sh        # Manual schedule updater (interactive)
+├── bc-time.txt               # EiBi time-based schedules (7337 entries)
+├── bc-freq.txt               # Frequency database (1482 entries)
+├── .radiod-hostname          # Saved radiod hostname (created by start.sh)
 ├── public/
-│   ├── index.html         # Main web interface (tabbed UI)
-│   ├── styles.css         # Styling
-│   └── app.js             # Frontend JavaScript (AudioSession, WebSocket)
-├── README.md              # This file
-├── QUICKSTART.md          # Quick start guide
-├── CONFIGURATION.md       # Configuration guide
-├── SCHEDULE_UPDATE.md     # Schedule update guide
-├── TROUBLESHOOTING.md     # Detailed troubleshooting
-└── .gitignore             # Git ignore patterns
+│   ├── index.html            # Main web interface with table/card views
+│   ├── styles.css            # Styling (includes table view styles)
+│   └── app.js                # Frontend JavaScript (AudioSession, table/card rendering)
+├── README.md                 # This file
+├── QUICKSTART.md             # Quick start guide
+├── CONFIGURATION.md          # Configuration guide
+├── SCHEDULE_UPDATE.md        # Schedule update guide
+├── TROUBLESHOOTING.md        # Detailed troubleshooting
+└── .gitignore                # Git ignore patterns
 ```
 
 ## Troubleshooting

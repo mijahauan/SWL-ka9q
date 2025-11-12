@@ -661,3 +661,232 @@ body {
         max-height: 60vh;
     }
 }
+
+/* View Toggle Controls */
+.view-toggle {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.toggle-btn {
+    padding: 8px 16px;
+    border: 2px solid #2a5298;
+    background: white;
+    color: #2a5298;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.toggle-btn:hover {
+    background: #f0f4f8;
+}
+
+.toggle-btn.active {
+    background: #2a5298;
+    color: white;
+}
+
+/* Compact Table View */
+.stations-table {
+    background: rgba(255, 255, 255, 0.98);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.stations-table table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.stations-table thead {
+    background: #2a5298;
+    color: white;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.stations-table th {
+    padding: 12px 10px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stations-table tbody tr {
+    border-bottom: 1px solid #e0e0e0;
+    transition: background 0.2s;
+}
+
+.stations-table tbody tr:hover {
+    background: #f5f8fb;
+}
+
+.stations-table tbody tr.on-air {
+    background: #f0f9f0;
+    border-left: 4px solid #4CAF50;
+}
+
+.stations-table tbody tr.listening {
+    background: #e3f2fd;
+    border-left: 4px solid #2196F3;
+    font-weight: 500;
+}
+
+.stations-table tbody tr.off-air {
+    opacity: 0.5;
+}
+
+.stations-table td {
+    padding: 10px;
+    vertical-align: middle;
+}
+
+/* Status Badge in Table */
+.table-status {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.table-status.on-air {
+    background: #4CAF50;
+    color: white;
+}
+
+.table-status.off-air {
+    background: #e0e0e0;
+    color: #666;
+}
+
+/* Table Column Widths */
+.stations-table th:nth-child(1), /* Frequency */
+.stations-table td:nth-child(1) {
+    width: 90px;
+    font-weight: 600;
+    color: #2a5298;
+}
+
+.stations-table th:nth-child(2), /* Station */
+.stations-table td:nth-child(2) {
+    width: auto;
+    min-width: 150px;
+}
+
+.stations-table th:nth-child(3), /* Time */
+.stations-table td:nth-child(3) {
+    width: 120px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+}
+
+.stations-table th:nth-child(4), /* Language */
+.stations-table td:nth-child(4) {
+    width: 80px;
+}
+
+.stations-table th:nth-child(5), /* Target */
+.stations-table td:nth-child(5) {
+    width: 100px;
+}
+
+.stations-table th:nth-child(6), /* Status */
+.stations-table td:nth-child(6) {
+    width: 80px;
+    text-align: center;
+}
+
+.stations-table th:nth-child(7), /* Actions */
+.stations-table td:nth-child(7) {
+    width: 180px;
+    text-align: right;
+}
+
+/* Compact Action Buttons */
+.table-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.table-btn {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.table-btn.play {
+    background: #4CAF50;
+    color: white;
+}
+
+.table-btn.play:hover {
+    background: #45a049;
+}
+
+.table-btn.stop {
+    background: #f44336;
+    color: white;
+}
+
+.table-btn.stop:hover {
+    background: #da190b;
+}
+
+.table-btn.tune {
+    background: #2196F3;
+    color: white;
+}
+
+.table-btn.tune:hover {
+    background: #0b7dda;
+}
+
+.table-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* Keep original card styling */
+.stations-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 20px;
+}
+
+/* Responsive Table */
+@media (max-width: 1200px) {
+    .stations-table {
+        overflow-x: auto;
+    }
+    
+    .stations-table table {
+        min-width: 900px;
+    }
+}
+
+@media (max-width: 768px) {
+    .view-toggle {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .toggle-btn {
+        flex: 1;
+    }
+}

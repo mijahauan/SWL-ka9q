@@ -39,15 +39,14 @@
         </div>
 
         <div class="controls">
-            <div class="info-group">
-                <span class="info-text" id="view-info">
-                    📻 Showing all stations • Green border = Currently on-air • Click ▶️ to listen live
-                </span>
+            <div class="view-toggle">
+                <button class="toggle-btn active" onclick="switchDisplay('table')" id="toggle-table">📊 Table View</button>
+                <button class="toggle-btn" onclick="switchDisplay('cards')" id="toggle-cards">📇 Card View</button>
             </div>
             <div class="search-group">
-                <input type="text" id="search" placeholder="Search by station, frequency, or language...">
+                <input type="text" id="search" placeholder="Search by station, frequency, language...">
             </div>
-            <button class="btn-reload" onclick="reloadSchedules()">🔄 Reload Schedules</button>
+            <button class="btn-reload" onclick="reloadSchedules()">🔄 Reload</button>
         </div>
 
         <div class="frequency-bands">
@@ -63,7 +62,7 @@
             </div>
         </div>
 
-        <div id="stations-container" class="stations-grid">
+        <div id="stations-container" class="stations-table">
             <div class="loading">Loading stations...</div>
         </div>
     </div>
