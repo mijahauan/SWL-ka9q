@@ -571,10 +571,27 @@ function createFrequencyRow(freq) {
     const freqKHz = (freq.frequency / 1000).toFixed(0);
     const scheduleCount = freq.schedules ? freq.schedules.length : 0;
     
+    // Get unique station names from all schedules
+    let stationNames = 'N/A';
+    if (freq.schedules && freq.schedules.length > 0) {
+        const uniqueStations = [...new Set(freq.schedules.map(s => s.station))];
+        if (uniqueStations.length === 1) {
+            stationNames = uniqueStations[0];
+        } else {
+            // Show first 2-3 stations, then "..."
+            stationNames = uniqueStations.slice(0, 2).join(', ');
+            if (uniqueStations.length > 2) {
+                stationNames += `, +${uniqueStations.length - 2} more`;
+            }
+        }
+    } else if (freq.station) {
+        stationNames = freq.station;
+    }
+    
     return `
         <tr class="${rowClass}" data-frequency="${freq.frequency}">
             <td>${freqKHz}</td>
-            <td><strong>${freq.station || 'Multiple'}</strong></td>
+            <td><strong>${stationNames}</strong></td>
             <td>${scheduleCount} broadcast${scheduleCount !== 1 ? 's' : ''}</td>
             <td>${freq.location || 'N/A'}</td>
             <td>${freq.power || 'N/A'} kW</td>
