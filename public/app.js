@@ -324,7 +324,7 @@ function renderFrequencyView() {
                 freq.frequency.toString(),
                 freq.location || '',
                 freq.target || '',
-                ...freq.schedules.map(s => `${s.language} ${s.target}`)
+                ...freq.schedules.map(s => `${s.station} ${s.language} ${s.target}`)
             ].join(' ').toLowerCase();
             
             if (!searchableText.includes(searchTerm)) return false;
