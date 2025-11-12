@@ -14,22 +14,27 @@ npm install
 
 The `setup-venv.sh` script creates a Python virtual environment and installs the **ka9q-python** package from GitHub (not available on PyPI).
 
-## Zero Configuration for Local Setup!
+## Quick Start with Interactive Setup
 
-**If radiod is running on the same machine as SWL-ka9q** (the most common setup), no configuration is needed! The default is `localhost`.
+The easiest way to configure SWL-ka9q is to use the interactive startup script:
 
-Just run:
 ```bash
 npm start
 ```
 
-## Remote Radiod Configuration
+**On first run**, you'll be prompted to enter the radiod hostname:
+- For local radiod: enter `localhost` (or just press Enter for default)
+- For remote radiod: enter the hostname or IP address (e.g., `bee1-hf-status.local` or `192.168.1.100`)
 
-**Only configure this if radiod is on a different machine:**
+Your choice is saved to `.radiod-hostname` and used for future runs. You can change it anytime by:
+- Deleting `.radiod-hostname` and running `npm start` again
+- Answering 'n' when asked if you want to use the saved hostname
 
-The `RADIOD_HOSTNAME` tells SWL-ka9q where to find your ka9q-radio server.
+## Alternative Configuration Methods
 
-#### Option 1: Environment Variable (Recommended)
+If you prefer not to use the interactive prompt, you have other options:
+
+#### Option 1: Environment Variable
 
 ```bash
 export RADIOD_HOSTNAME=your-radiod-hostname

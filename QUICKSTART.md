@@ -91,9 +91,9 @@ Open your browser to: **http://localhost:3100**
 
 ### Change Server Port
 
-Edit `server.js` line 21:
+Edit `server.js` line 25:
 ```javascript
-const PORT = 3100;  // Change to your preferred port
+const PORT = process.env.PORT || 3100;  // Change default port if needed
 ```
 
 Or use an environment variable:

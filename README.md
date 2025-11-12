@@ -22,8 +22,9 @@ A web-based interface for monitoring shortwave broadcast stations with live audi
 - Supports multiple simultaneous streams
 
 🎛️ **Advanced Tuning Controls**
+- Main frequency tuning (change the tuned frequency)
 - Real-time AGC (Automatic Gain Control) adjustment
-- Manual gain control when AGC is disabled
+- Manual gain control (channels created with AGC disabled by default)
 - Filter bandwidth adjustment (low/high edge)
 - Frequency shift for fine-tuning (useful for CW/SSB)
 - Output level control
@@ -128,14 +129,19 @@ A web-based interface for monitoring shortwave broadcast stations with live audi
    
    **Default:** Works out-of-the-box if radiod is on the same machine (uses `localhost`)
    
-   **Only configure if radiod is on a different machine:**
+   **For interactive setup (recommended):**
    ```bash
-   # Set hostname to remote radiod IP:
-   export RADIOD_HOSTNAME=192.168.1.100
    npm start
+   # You'll be prompted to enter the radiod hostname on first run
    ```
    
-   **See [CONFIGURATION.md](CONFIGURATION.md) for detailed remote setup.**
+   **Or set manually if radiod is on a different machine:**
+   ```bash
+   export RADIOD_HOSTNAME=192.168.1.100
+   npm run start-direct
+   ```
+   
+   **See [CONFIGURATION.md](CONFIGURATION.md) and [QUICKSTART.md](QUICKSTART.md) for detailed setup.**
 
 ## Configuration
 
@@ -236,8 +242,8 @@ pnpm run dev
 Optional configuration via environment variables:
 ```bash
 export PORT=3100                              # Web server port (default: 3100)
-export RADIOD_HOSTNAME=bee1-hf-status.local   # radiod hostname (default: bee1-hf-status.local)
-pnpm start
+export RADIOD_HOSTNAME=your-radiod-hostname   # radiod hostname (default: localhost)
+npm run start-direct                          # Skip interactive prompt
 ```
 
 ### Access the Interface
@@ -262,6 +268,12 @@ When you click "Listen Live":
 6. Multiple stations can be played simultaneously
 7. Click **⏹️ Stop Listening** to end the stream
 
+**Channel Creation:**
+- Channels are created with AM demodulation preset at 12 kHz sample rate
+- AGC (Automatic Gain Control) is **disabled by default** to allow manual control
+- Initial gain set to 30 dB for good audio levels
+- All tuning controls are immediately available for adjustment
+
 **Channel Cleanup:**
 - When stopping a stream, the server deletes the channel from radiod by setting its frequency to 0 Hz
 - This prevents accumulation of unused channels on the radiod server
@@ -269,8 +281,9 @@ When you click "Listen Live":
 
 **Real-Time Tuning:**
 - Click **🎛️ Tune** button on any playing station to open the tuning panel
+- Change main frequency (tune to different stations/signals)
 - Adjust AGC settings: enable/disable, hangtime, headroom
-- Control manual gain when AGC is off (linear modes only)
+- Control manual gain (channels default to AGC off for manual control)
 - Modify filter bandwidth (low/high edge in Hz)
 - Apply frequency shift for fine-tuning (CW beat note, SSB clarity)
 - Adjust output level/volume
@@ -292,6 +305,8 @@ When you click "Listen Live":
 
 ### Tuning Controls
 
+- `POST /api/audio/tune/:ssrc/frequency` - Change main frequency
+  - Body: `{ frequency_hz: float }`
 - `POST /api/audio/tune/:ssrc/agc` - Adjust AGC settings
   - Body: `{ enable: boolean, hangtime: float, headroom: float }`
 - `POST /api/audio/tune/:ssrc/gain` - Set manual gain
@@ -339,16 +354,19 @@ The client-side JavaScript:
 SWL-ka9q/
 ├── server.js              # Node.js backend server
 ├── package.json           # Node.js dependencies
+├── start.sh               # Interactive startup script (prompts for hostname)
 ├── setup-venv.sh          # Python venv setup script
 ├── update-schedule.sh     # EiBi schedule updater helper
 ├── bc-time.txt            # EiBi time-based schedules (7337 entries)
 ├── bc-freq.txt            # Frequency database (1482 entries)
+├── .radiod-hostname       # Saved radiod hostname (created by start.sh)
 ├── public/
 │   ├── index.html         # Main web interface (tabbed UI)
 │   ├── styles.css         # Styling
 │   └── app.js             # Frontend JavaScript (AudioSession, WebSocket)
 ├── README.md              # This file
 ├── QUICKSTART.md          # Quick start guide
+├── CONFIGURATION.md       # Configuration guide
 ├── SCHEDULE_UPDATE.md     # Schedule update guide
 ├── TROUBLESHOOTING.md     # Detailed troubleshooting
 └── .gitignore             # Git ignore patterns
@@ -371,7 +389,8 @@ SWL-ka9q/
 
 2. **Check ka9q-python installation:**
    ```bash
-   python3 -c "from ka9q import RadiodControl; c = RadiodControl('bee1-hf-status.local'); print('✅ Connected')"
+   python3 -c "from ka9q import RadiodControl; c = RadiodControl('localhost'); print('✅ Connected')"
+   # Or use your radiod hostname instead of localhost
    ```
 
 3. **Verify multicast connectivity:**
@@ -392,8 +411,9 @@ SWL-ka9q/
     # Example output: status = bee1-hf-status.local
     ```
   - Ensure SWL-ka9q matches this hostname:
-    - Check `server.js` line 30: `RADIOD_HOSTNAME` constant
-    - Or set via environment variable: `export RADIOD_HOSTNAME=bee1-hf-status.local`
+    - Run `npm start` and enter the hostname when prompted
+    - Or check `server.js` line 34: `RADIOD_HOSTNAME` constant
+    - Or set via environment variable: `export RADIOD_HOSTNAME=your-radiod-hostname`
 - **Test connectivity:**
   ```bash
   ping your-radiod-hostname
