@@ -549,8 +549,7 @@ function createFrequenciesTable(frequencies) {
                     <th>Freq (kHz)</th>
                     <th>Station</th>
                     <th>Schedules</th>
-                    <th>Location</th>
-                    <th>Power</th>
+                    <th>Country</th>
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>
@@ -594,7 +593,6 @@ function createFrequencyRow(freq) {
             <td><strong>${stationNames}</strong></td>
             <td>${scheduleCount} broadcast${scheduleCount !== 1 ? 's' : ''}</td>
             <td>${freq.location || 'N/A'}</td>
-            <td>${freq.power || 'N/A'} kW</td>
             <td>
                 <span class="table-status ${freq.onAir ? 'on-air' : 'off-air'}">
                     ${freq.onAir ? '🔴 LIVE' : '⚫ OFF'}

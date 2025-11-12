@@ -582,21 +582,39 @@ function parseFreqSchedule() {
     const content = fs.readFileSync(FREQ_SCHEDULE_FILE, 'utf-8');
     const lines = content.split('\n');
     
+    // EiBi frequency file format (column-based):
+    // Columns 0-13:   Frequency (with decimal)
+    // Columns 14-27:  Time range
+    // Columns 28-31:  Country code
+    // Columns 32-61:  Station name (30 chars)
+    // Columns 62-65:  Language
+    // Columns 66-69:  Target
+    // Columns 70+:    Notes/additional info
+    
     for (const line of lines) {
-      if (line.trim() === '' || line.startsWith('#')) continue;
+      // Skip headers, empty lines, and short lines
+      if (line.length < 60 || !/^\d/.test(line)) continue;
       
-      const parts = line.split('|').map(s => s.trim());
-      if (parts.length >= 6) {
-        const [frequency, station, power, location, target, notes] = parts;
-        
-        freqMap.set(parseFloat(frequency) * 1000, { // Convert kHz to Hz
-          station,
-          power,
-          location,
-          target,
-          notes
-        });
-      }
+      const freqStr = line.substring(0, 14).trim();
+      const timeRange = line.substring(14, 28).trim();
+      const countryCode = line.substring(28, 32).trim();
+      const stationName = line.substring(32, 62).trim();
+      const language = line.substring(62, 66).trim();
+      const target = line.substring(66, 70).trim();
+      const notes = line.substring(70).trim();
+      
+      if (!freqStr || !stationName) continue;
+      
+      const frequency = parseFloat(freqStr) * 1000; // Convert kHz to Hz
+      if (frequency < 1000000 || frequency > 30000000) continue; // Skip if not HF range
+      
+      freqMap.set(frequency, {
+        station: stationName,
+        power: '', // Not in frequency file
+        location: countryCode, // Use country code as location
+        target: target,
+        notes: notes
+      });
     }
   } catch (err) {
     console.error('Error parsing frequency schedule:', err.message);
@@ -860,7 +878,10 @@ app.get('/api/stations', (req, res) => {
     const freqInfo = frequencyInfo.get(schedule.frequency);
     return {
       ...schedule,
-      ...(freqInfo || {}),
+      // Only add location and notes from frequency data, don't overwrite station/target
+      location: freqInfo?.location || schedule.country,
+      power: freqInfo?.power || '',
+      notes: freqInfo?.notes || '',
       onAir: isOnAir(schedule)
     };
   });
