@@ -240,7 +240,7 @@ try:
     
     # Create and configure AM channel (outputs PCM audio)
     # AGC is disabled to allow manual gain control from the web UI
-    control.create_and_configure_channel(
+    control.create_channel(
         ssrc=${ssrc},
         frequency_hz=${frequency},
         preset='am',

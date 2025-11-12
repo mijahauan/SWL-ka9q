@@ -100,7 +100,7 @@ from ka9q import RadiodControl
 
 control = RadiodControl('bee1-hf-status.local')
 try:
-    control.create_and_configure_channel(
+    control.create_channel(
         ssrc=9700000,
         frequency_hz=9700000,
         preset='am',

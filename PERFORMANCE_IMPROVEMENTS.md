@@ -90,9 +90,9 @@
 **Action:** Updated to latest version from GitHub repository
 
 **Verification:** 
-- Version: 1.0.0 (commit 7f5ecb8)
+- Version: 2.1.0 (v2.1.0 tag)
 - Confirmed API compatibility
-- Method signature verified: `create_and_configure_channel()` works correctly with AM preset
+- Method signature verified: `create_channel()` works correctly with AM preset
 
 **Files Modified:** `venv/` (pip packages)
 
