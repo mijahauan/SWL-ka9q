@@ -529,55 +529,61 @@ function parseTimeSchedule() {
       const endTime = match[2];
       const rest = match[3].trim();
       
-      // Parse with regex to handle variable spacing
-      // Format can be: [Days] CountryCode StationName Lang Target Freqs
-      const parseMatch = rest.match(/^(?:([^\s]+)\s+)?([A-Z]{2,3})\s+(.+?)\s+([A-Z,-]{1,6})\s+([A-Za-z]{2,4})\s+(.+)$/);
+      // Parse EiBi format more carefully
+      // Format: [Days] CountryCode StationName Lang Target Frequencies
+      // First, check if there's a days field (starts with days pattern)
+      let daysPart = null;
+      let restAfterDays = rest;
       
-      if (!parseMatch) {
-        // Try simpler pattern without days
-        const simpleMatch = rest.match(/^([A-Z]{2,3})\s+(.+?)\s+([A-Z,-]{1,6})\s+([A-Za-z]{2,4})\s+(.+)$/);
-        if (!simpleMatch) continue;
-        
-        const [, countryCode, stationName, language, target, frequencies] = simpleMatch;
-        
-        // Extract frequencies
-        const freqMatches = frequencies.match(/(\d+(?:\.\d+)?)/g);
-        if (!freqMatches) continue;
-        
-        for (const freqStr of freqMatches) {
-          const freq = parseFloat(freqStr) * 1000;
-          if (freq > 1000000 && freq < 30000000) {  // Valid HF range
-            stations.push({
-              frequency: freq,
-              station: stationName.trim(),
-              time: `${startTime.substring(0,2)}${startTime.substring(2,4)}-${endTime.substring(0,2)}${endTime.substring(2,4)}`,
-              days: 'daily',
-              language: language.trim(),
-              target: target.trim(),
-              country: countryCode.trim()
-            });
-          }
-        }
-      } else {
-        const [, daysPart, countryCode, stationName, language, target, frequencies] = parseMatch;
-        
-        // Extract frequencies
-        const freqMatches = frequencies.match(/(\d+(?:\.\d+)?)/g);
-        if (!freqMatches) continue;
-        
-        for (const freqStr of freqMatches) {
-          const freq = parseFloat(freqStr) * 1000;
-          if (freq > 1000000 && freq < 30000000) {  // Valid HF range
-            stations.push({
-              frequency: freq,
-              station: stationName.trim(),
-              time: `${startTime.substring(0,2)}${startTime.substring(2,4)}-${endTime.substring(0,2)}${endTime.substring(2,4)}`,
-              days: daysPart ? daysPart.trim() : 'daily',
-              language: language.trim(),
-              target: target.trim(),
-              country: countryCode.trim()
-            });
-          }
+      // Check if line starts with days (Mo-Fr, 1-5, etc.)
+      const daysPattern = /^((\d+(-\d+)?(,\d+(-\d+)?)*)|((Mo|Tu|We|Th|Fr|Sa|Su)(-(?:Mo|Tu|We|Th|Fr|Sa|Su))?))\s+/;
+      const daysMatch = rest.match(daysPattern);
+      if (daysMatch) {
+        daysPart = daysMatch[1];
+        restAfterDays = rest.substring(daysMatch[0].length);
+      }
+      
+      // Now parse: CountryCode<space>StationName<2+spaces>Lang<2+spaces>TargetAndFreqs
+      // Extract country code (1-3 uppercase letters followed by space)
+      const countryMatch = restAfterDays.match(/^([A-Z]{1,3})\s+(.+)$/);
+      if (!countryMatch) continue;
+      
+      const countryCode = countryMatch[1];
+      const afterCountry = countryMatch[2];
+      
+      // Split remaining on 2+ spaces to get: StationName, Lang, TargetAndFreqs
+      const parts = afterCountry.split(/\s{2,}/);
+      if (parts.length < 3) continue;  // Need at least station, lang, target+freqs
+      
+      const [stationName, language, targetAndFreqs] = parts;
+      
+      // Ensure all required fields exist
+      if (!stationName || !language || !targetAndFreqs) continue;
+      
+      // Split target and frequencies (target is 2-4 letters, then space, then frequencies)
+      const targetMatch = targetAndFreqs.match(/^([A-Za-z,-]{2,6})\s+(.+)$/);
+      if (!targetMatch) continue;
+      
+      const target = targetMatch[1];
+      const frequencies = targetMatch[2];
+      
+      // Extract frequencies (numbers, possibly with decimals)
+      const freqMatches = frequencies.match(/(\d+(?:\.\d+)?)/g);
+      if (!freqMatches) continue;
+      
+      // Create a station entry for each frequency
+      for (const freqStr of freqMatches) {
+        const freq = parseFloat(freqStr) * 1000;  // Convert kHz to Hz
+        if (freq > 1000000 && freq < 30000000) {  // Valid HF range (1-30 MHz)
+          stations.push({
+            frequency: freq,
+            station: stationName.trim(),
+            time: `${startTime}-${endTime}`,
+            days: daysPart ? daysPart.trim() : 'daily',
+            language: language.trim(),
+            target: target.trim(),
+            country: countryCode.trim()
+          });
         }
       }
     }
