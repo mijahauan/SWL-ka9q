@@ -519,53 +519,32 @@ function parseTimeSchedule() {
     
     // Suppress processing logs
     
-    // Parse each full line
+    // Parse each full line using fixed column positions (EiBi format is column-based)
     for (const line of fullLines) {
-      // EiBi format: Time(start) Time(end) [Days] ITU Station Lang Target Frequencies
-      const match = line.match(/^(\d{4})\s+(\d{4})\s+(.+)$/);
-      if (!match) continue;
+      // Skip if line is too short or doesn't start with time
+      if (line.length < 54 || !/^\d{4}\s+\d{4}/.test(line)) continue;
       
-      const startTime = match[1];
-      const endTime = match[2];
-      const rest = match[3].trim();
+      // EiBi fixed column format:
+      // Columns 0-3:   Start time (4 digits)
+      // Columns 5-8:   End time (4 digits)
+      // Columns 10-15: Days (optional, 6 chars)
+      // Columns 16-19: Country code (3-4 chars)
+      // Columns 20-45: Station name (26 chars)
+      // Columns 46-49: Language (4 chars)
+      // Columns 50-53: Target (4 chars)
+      // Columns 54+:   Frequencies
       
-      // Parse EiBi format more carefully
-      // Format: [Days] CountryCode StationName Lang Target Frequencies
-      // First, check if there's a days field (starts with days pattern)
-      let daysPart = null;
-      let restAfterDays = rest;
+      const startTime = line.substring(0, 4).trim();
+      const endTime = line.substring(5, 9).trim();
+      const daysPart = line.substring(10, 16).trim() || 'daily';
+      const countryCode = line.substring(16, 20).trim();
+      const stationName = line.substring(20, 46).trim();
+      const language = line.substring(46, 50).trim();
+      const target = line.substring(50, 54).trim();
+      const frequencies = line.substring(54).trim();
       
-      // Check if line starts with days (Mo-Fr, 1-5, etc.)
-      const daysPattern = /^((\d+(-\d+)?(,\d+(-\d+)?)*)|((Mo|Tu|We|Th|Fr|Sa|Su)(-(?:Mo|Tu|We|Th|Fr|Sa|Su))?))\s+/;
-      const daysMatch = rest.match(daysPattern);
-      if (daysMatch) {
-        daysPart = daysMatch[1];
-        restAfterDays = rest.substring(daysMatch[0].length);
-      }
-      
-      // Now parse: CountryCode<space>StationName<2+spaces>Lang<2+spaces>TargetAndFreqs
-      // Extract country code (1-3 uppercase letters followed by space)
-      const countryMatch = restAfterDays.match(/^([A-Z]{1,3})\s+(.+)$/);
-      if (!countryMatch) continue;
-      
-      const countryCode = countryMatch[1];
-      const afterCountry = countryMatch[2];
-      
-      // Split remaining on 2+ spaces to get: StationName, Lang, TargetAndFreqs
-      const parts = afterCountry.split(/\s{2,}/);
-      if (parts.length < 3) continue;  // Need at least station, lang, target+freqs
-      
-      const [stationName, language, targetAndFreqs] = parts;
-      
-      // Ensure all required fields exist
-      if (!stationName || !language || !targetAndFreqs) continue;
-      
-      // Split target and frequencies (target is 2-4 letters, then space, then frequencies)
-      const targetMatch = targetAndFreqs.match(/^([A-Za-z,-]{2,6})\s+(.+)$/);
-      if (!targetMatch) continue;
-      
-      const target = targetMatch[1];
-      const frequencies = targetMatch[2];
+      // Validate required fields
+      if (!startTime || !endTime || !countryCode || !stationName || !language || !target || !frequencies) continue;
       
       // Extract frequencies (numbers, possibly with decimals)
       const freqMatches = frequencies.match(/(\d+(?:\.\d+)?)/g);
