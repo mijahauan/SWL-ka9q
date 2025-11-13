@@ -61,9 +61,8 @@ Automatic saving of tuning preferences per frequency:
 - Mode preset (AM/USB/LSB/CW)
 - Filter preset and custom values
 - AGC enable/disable state
-- Manual gain setting
+- Manual gain setting (for volume control)
 - Frequency shift
-- Output level
 - Squelch threshold
 
 **Storage**: Browser localStorage (per frequency key)
@@ -109,11 +108,6 @@ Manual save button with visual feedback:
 - **Improved**: Now with +/- quick tune buttons
 - **Input**: Direct kHz entry still available
 - **Updates**: Immediate application to radiod
-
-### Output Level
-- **Unchanged**: 0 to 1.0 range
-- **Display**: Shows two decimal places
-- **Default**: 0.50 (50%)
 
 ## UI/UX Improvements
 

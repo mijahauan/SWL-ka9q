@@ -1046,8 +1046,6 @@ function openTuningPanel(ssrc, station) {
     document.getElementById('filter-high').value = savedSettings.filterHigh || 5000;
     document.getElementById('main-freq').value = (station.frequency / 1000).toFixed(1);
     document.getElementById('shift-freq').value = savedSettings.shift || 0;
-    document.getElementById('output-level').value = savedSettings.outputLevel || 0.5;
-    document.getElementById('output-level-value').textContent = (savedSettings.outputLevel || 0.5).toFixed(2);
     document.getElementById('squelch-threshold').value = savedSettings.squelch || -60;
     document.getElementById('squelch-value').textContent = savedSettings.squelch || '-60';
     
@@ -1091,7 +1089,6 @@ function savePreset() {
         filterLow: parseFloat(document.getElementById('filter-low').value),
         filterHigh: parseFloat(document.getElementById('filter-high').value),
         shift: parseFloat(document.getElementById('shift-freq').value),
-        outputLevel: parseFloat(document.getElementById('output-level').value),
         squelch: parseFloat(document.getElementById('squelch-threshold').value)
     };
     
@@ -1124,8 +1121,6 @@ function resetToDefaults() {
     document.getElementById('manual-gain').value = 30;
     document.getElementById('manual-gain-value').textContent = '30';
     document.getElementById('shift-freq').value = 0;
-    document.getElementById('output-level').value = 0.5;
-    document.getElementById('output-level-value').textContent = '0.50';
     document.getElementById('squelch-threshold').value = -60;
     document.getElementById('squelch-value').textContent = '-60';
     
@@ -1133,7 +1128,6 @@ function resetToDefaults() {
     updateAGC();
     updateGain(30);
     updateShift(0);
-    updateOutputLevel(0.5);
     updateSquelch(-60);
     updateEffectiveFrequencyDisplay();
     
@@ -1430,32 +1424,6 @@ async function updateShift(value) {
     }
 }
 
-/**
- * Update output level
- */
-async function updateOutputLevel(value) {
-    if (!currentTuningSSRC) return;
-    
-    document.getElementById('output-level-value').textContent = parseFloat(value).toFixed(2);
-    console.log(`🎛️ Updating output level for SSRC ${currentTuningSSRC}: ${value}`);
-    
-    try {
-        const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/output-level`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ level: parseFloat(value) })
-        });
-        
-        const data = await response.json();
-        if (!response.ok) {
-            console.error('❌ Failed to update output level:', data);
-        } else {
-            console.log('✅ Output level updated successfully');
-        }
-    } catch (error) {
-        console.error('❌ Error updating output level:', error);
-    }
-}
 
 /**
  * Update squelch threshold

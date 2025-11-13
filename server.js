@@ -433,10 +433,6 @@ print(json.dumps({'success': True, 'ssrc': ${ssrc}}))`;
     return this.executeTuningCommand(ssrc, `control.set_shift_frequency(ssrc=${ssrc}, shift_hz=${shift_hz})`);
   }
 
-  async setOutputLevel(ssrc, level) {
-    return this.executeTuningCommand(ssrc, `control.set_output_level(ssrc=${ssrc}, level=${level})`);
-  }
-
   async setSquelch(ssrc, threshold) {
     return this.executeTuningCommand(ssrc, `control.set_squelch_open(ssrc=${ssrc}, level=${threshold})`);
   }
@@ -1057,18 +1053,6 @@ app.post('/api/audio/tune/:ssrc/shift', async (req, res) => {
     const { shift_hz } = req.body;
     
     await radioProxy.setShift(ssrc, shift_hz);
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/api/audio/tune/:ssrc/output-level', async (req, res) => {
-  try {
-    const ssrc = parseInt(req.params.ssrc);
-    const { level } = req.body;
-    
-    await radioProxy.setOutputLevel(ssrc, level);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

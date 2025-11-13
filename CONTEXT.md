@@ -72,7 +72,6 @@ This is a high-level map of the project's most important, stable interfaces.
 * `setGain(ssrc, gain_db)`: Sets manual gain in dB
 * `setFilter(ssrc, low_edge, high_edge)`: Adjusts filter bandwidth
 * `setShift(ssrc, shift_hz)`: Sets frequency shift for fine-tuning
-* `setOutputLevel(ssrc, level)`: Controls output volume
 * `executeTuningCommand(ssrc, command)`: Generic Python command executor for tuning
 
 #### Schedule Management Functions
@@ -94,7 +93,6 @@ This is a high-level map of the project's most important, stable interfaces.
 * `POST /api/audio/tune/:ssrc/gain`: Set manual gain (body: `{ gain_db: float }`)
 * `POST /api/audio/tune/:ssrc/filter`: Adjust filter bandwidth (body: `{ low_edge: float, high_edge: float }`)
 * `POST /api/audio/tune/:ssrc/shift`: Set frequency shift (body: `{ shift_hz: float }`)
-* `POST /api/audio/tune/:ssrc/output-level`: Set output level (body: `{ level: float }`)
 * `GET /api/audio/health`: Check audio proxy status and Python connectivity
 * `POST /api/reload`: Reload broadcast schedules from files
 
@@ -119,10 +117,9 @@ This is a high-level map of the project's most important, stable interfaces.
 * `openTuningPanel(frequency, station)`: Open tuning controls UI
 * `updateFrequency(value)`: Change main tuned frequency
 * `updateAGC(enabled)`: Toggle AGC on/off
-* `updateGain(value)`: Adjust manual gain
+* `updateGain(value)`: Adjust manual gain (use this for volume control)
 * `updateFilter(lowEdge, highEdge)`: Change filter bandwidth
 * `updateShift(value)`: Apply frequency shift
-* `updateOutputLevel(value)`: Adjust output volume
 
 ### Configuration Files
 
@@ -254,10 +251,10 @@ For the tuning function improvement task, you should:
 2. **Current tuning capabilities** (already implemented):
    - Main frequency tuning
    - AGC control (enable/disable, hangtime, headroom)
-   - Manual gain control
+   - Manual gain control (also controls volume)
    - Filter bandwidth (low/high edge)
    - Frequency shift
-   - Output level
+   - Squelch threshold
    
 3. **Potential improvements to consider**:
    - Better UI layout for tuning controls

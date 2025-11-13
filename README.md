@@ -24,10 +24,10 @@ A web-based interface for monitoring shortwave broadcast stations with live audi
 🎛️ **Advanced Tuning Controls**
 - Main frequency tuning (change the tuned frequency)
 - Real-time AGC (Automatic Gain Control) adjustment
-- Manual gain control (channels created with AGC disabled by default)
+- Manual gain control for volume (channels created with AGC disabled by default)
 - Filter bandwidth adjustment (low/high edge)
 - Frequency shift for fine-tuning (useful for CW/SSB)
-- Output level control
+- Squelch threshold control
 - Per-station tuning while streaming
 
 📡 **Advanced Filtering**
@@ -321,10 +321,10 @@ When you click "Listen Live":
 - Click **🎛️ Tune** button on any playing station to open the tuning panel
 - Change main frequency (tune to different stations/signals)
 - Adjust AGC settings: enable/disable, hangtime, headroom
-- Control manual gain (channels default to AGC off for manual control)
+- Control manual gain for volume adjustment (channels default to AGC off for manual control)
 - Modify filter bandwidth (low/high edge in Hz)
 - Apply frequency shift for fine-tuning (CW beat note, SSB clarity)
-- Adjust output level/volume
+- Adjust squelch threshold to mute weak signals
 - Changes apply immediately to the active stream
 
 ## API Endpoints
@@ -353,8 +353,8 @@ When you click "Listen Live":
   - Body: `{ low_edge: float, high_edge: float }`
 - `POST /api/audio/tune/:ssrc/shift` - Set frequency shift
   - Body: `{ shift_hz: float }`
-- `POST /api/audio/tune/:ssrc/output-level` - Set output level
-  - Body: `{ level: float }`
+- `POST /api/audio/tune/:ssrc/squelch` - Set squelch threshold
+  - Body: `{ threshold: float }`
 
 ### Management
 
