@@ -160,7 +160,7 @@ body {
 }
 
 /* Frequency Bands */
-.frequency-bands {
+.frequency-bands, .filter-section {
     background: rgba(255, 255, 255, 0.95);
     padding: 20px;
     border-radius: 12px;
@@ -168,19 +168,19 @@ body {
     margin-bottom: 25px;
 }
 
-.frequency-bands h3 {
+.frequency-bands h3, .filter-section h3 {
     font-size: 16px;
     margin-bottom: 15px;
     color: #1e3c72;
 }
 
-.band-filters {
+.band-filters, .filter-buttons {
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
 }
 
-.band-btn {
+.band-btn, .filter-btn {
     padding: 8px 16px;
     background: #f5f5f5;
     border: 2px solid #e0e0e0;
@@ -190,15 +190,124 @@ body {
     transition: all 0.3s;
 }
 
-.band-btn:hover {
+.band-btn:hover, .filter-btn:hover {
     background: #e0e0e0;
     border-color: #1e3c72;
 }
 
-.band-btn.active {
+.band-btn.active, .filter-btn.active {
     background: #1e3c72;
     color: white;
     border-color: #1e3c72;
+}
+
+/* Special styling for region and language buttons */
+.filter-btn {
+    min-width: 80px;
+    text-align: center;
+}
+
+.filter-btn:active {
+    transform: scale(0.98);
+}
+
+/* Filter section header with info toggle */
+.filter-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.filter-header h3 {
+    margin: 0;
+}
+
+.info-toggle {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background 0.2s;
+    font-size: 16px;
+}
+
+.info-toggle:hover {
+    background: rgba(30, 60, 114, 0.1);
+}
+
+.info-icon {
+    display: inline-block;
+    font-style: normal;
+}
+
+/* Filter legend (collapsible reference) */
+.filter-legend {
+    margin-top: 15px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-left: 4px solid #2a5298;
+    border-radius: 6px;
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+    to {
+        opacity: 1;
+        max-height: 500px;
+        padding-top: 15px;
+        padding-bottom: 15px;
+    }
+}
+
+.legend-content {
+    font-size: 13px;
+    color: #333;
+}
+
+.legend-content strong {
+    display: block;
+    margin-bottom: 10px;
+    color: #1e3c72;
+}
+
+.legend-content p {
+    margin: 8px 0;
+    color: #666;
+}
+
+.legend-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+    margin: 10px 0;
+}
+
+.legend-grid div {
+    padding: 4px 0;
+}
+
+.legend-grid code {
+    background: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: bold;
+    color: #2a5298;
+    border: 1px solid #e0e0e0;
+}
+
+.legend-content small {
+    display: block;
+    margin-top: 10px;
+    color: #888;
+    font-style: italic;
 }
 
 /* Stations Grid */
@@ -497,8 +606,23 @@ body {
         align-items: stretch;
     }
     
-    .band-filters {
-        flex-direction: column;
+    .band-filters, .filter-buttons {
+        flex-direction: row;
+        max-height: 150px;
+        overflow-y: auto;
+    }
+    
+    .filter-btn, .band-btn {
+        flex: 0 0 auto;
+    }
+    
+    .legend-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .filter-header {
+        flex-direction: row;
+        align-items: center;
     }
 }
 
@@ -888,5 +1012,151 @@ body {
     
     .toggle-btn {
         flex: 1;
+    }
+}
+
+/* Enhanced Tuning Panel Styles */
+.effective-frequency-display {
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    padding: 12px 16px;
+    border-radius: 8px;
+    text-align: center;
+    margin-top: 10px;
+    box-shadow: 0 2px 8px rgba(30, 60, 114, 0.3);
+}
+
+.effective-frequency-display .label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 4px;
+}
+
+.effective-frequency-display .value {
+    display: block;
+    font-size: 24px;
+    font-weight: bold;
+    color: white;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 1px;
+}
+
+.preset-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.preset-btn {
+    padding: 8px 14px;
+    background: white;
+    border: 2px solid #2a5298;
+    color: #2a5298;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.2s;
+    flex: 1 1 auto;
+    min-width: 80px;
+    text-align: center;
+}
+
+.preset-btn:hover {
+    background: #e3f2fd;
+    transform: translateY(-1px);
+}
+
+.preset-btn.active {
+    background: #2a5298;
+    color: white;
+    box-shadow: 0 2px 8px rgba(42, 82, 152, 0.3);
+}
+
+/* Frequency Control Group (with +/- buttons) */
+.freq-control-group {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    margin-top: 8px;
+}
+
+.freq-btn {
+    padding: 6px 10px;
+    background: #2a5298;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 0.2s;
+    min-width: 45px;
+}
+
+.freq-btn:hover {
+    background: #1e3c72;
+    transform: scale(1.05);
+}
+
+.freq-btn:active {
+    transform: scale(0.98);
+}
+
+.freq-control-group input[type="number"] {
+    flex: 1;
+    text-align: center;
+    font-weight: 600;
+    font-size: 14px;
+    color: #1e3c72;
+    border: 2px solid #2a5298;
+}
+
+/* Improved tuning panel max height for better visibility */
+.tuning-panel {
+    max-height: 500px;
+}
+
+/* Scrollbar styling for tuning panel */
+.tuning-panel::-webkit-scrollbar {
+    width: 8px;
+}
+
+.tuning-panel::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.tuning-panel::-webkit-scrollbar-thumb {
+    background: #2a5298;
+    border-radius: 4px;
+}
+
+.tuning-panel::-webkit-scrollbar-thumb:hover {
+    background: #1e3c72;
+}
+
+/* Mobile responsive for enhanced tuning panel */
+@media (max-width: 768px) {
+    .preset-buttons {
+        flex-direction: column;
+    }
+    
+    .preset-btn {
+        flex: 1 1 100%;
+    }
+    
+    .freq-control-group {
+        flex-wrap: wrap;
+    }
+    
+    .freq-btn {
+        flex: 1 1 30%;
+        min-width: 40px;
+    }
+    
+    .tuning-panel {
+        max-height: 70vh;
     }
 }

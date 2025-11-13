@@ -379,12 +379,28 @@ except Exception as e:
       this.activeStreams.delete(ssrc);
       
       // Delete channel from radiod by setting frequency to 0 Hz
+      // Note: We bypass the library's set_frequency validation which rejects 0 Hz,
+      // but radiod itself accepts 0 Hz as a deletion signal
       try {
         const pythonScript = `import sys
 import json
+import random
 from ka9q import RadiodControl
+from ka9q.control import encode_double, encode_int, encode_eol
+from ka9q.types import StatusType, CMD
+
 control = RadiodControl('${RADIOD_HOSTNAME}')
-control.set_frequency(${ssrc}, 0)
+
+# Manually construct TLV command to set frequency to 0 (bypasses validation)
+cmdbuffer = bytearray()
+cmdbuffer.append(CMD)
+encode_double(cmdbuffer, StatusType.RADIO_FREQUENCY, 0.0)
+encode_int(cmdbuffer, StatusType.OUTPUT_SSRC, ${ssrc})
+encode_int(cmdbuffer, StatusType.COMMAND_TAG, random.randint(1, 2**31))
+encode_eol(cmdbuffer)
+
+# Send command to radiod
+control.send_command(cmdbuffer)
 print(json.dumps({'success': True, 'ssrc': ${ssrc}}))`;
         
         // Async execution using stdin
@@ -419,6 +435,10 @@ print(json.dumps({'success': True, 'ssrc': ${ssrc}}))`;
 
   async setOutputLevel(ssrc, level) {
     return this.executeTuningCommand(ssrc, `control.set_output_level(ssrc=${ssrc}, level=${level})`);
+  }
+
+  async setSquelch(ssrc, threshold) {
+    return this.executeTuningCommand(ssrc, `control.set_squelch_open(ssrc=${ssrc}, level=${threshold})`);
   }
 
   async executeTuningCommand(ssrc, command) {
@@ -1049,6 +1069,18 @@ app.post('/api/audio/tune/:ssrc/output-level', async (req, res) => {
     const { level } = req.body;
     
     await radioProxy.setOutputLevel(ssrc, level);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/audio/tune/:ssrc/squelch', async (req, res) => {
+  try {
+    const ssrc = parseInt(req.params.ssrc);
+    const { threshold } = req.body;
+    
+    await radioProxy.setSquelch(ssrc, threshold);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

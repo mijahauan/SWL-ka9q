@@ -52,13 +52,87 @@
         <div class="frequency-bands">
             <h3>Quick Filter by Band</h3>
             <div class="band-filters">
-                <button class="band-btn" onclick="filterByBand(null)">All Bands</button>
+                <button class="band-btn active" onclick="filterByBand(null)">All Bands</button>
                 <button class="band-btn" onclick="filterByBand(5, 6)">49m (5900-6200 kHz)</button>
                 <button class="band-btn" onclick="filterByBand(7, 7.5)">41m (7100-7600 kHz)</button>
                 <button class="band-btn" onclick="filterByBand(9, 10)">31m (9400-9900 kHz)</button>
                 <button class="band-btn" onclick="filterByBand(11, 12)">25m (11600-12100 kHz)</button>
                 <button class="band-btn" onclick="filterByBand(15, 16)">19m (15100-15800 kHz)</button>
                 <button class="band-btn" onclick="filterByBand(17, 18)">16m (17480-17900 kHz)</button>
+            </div>
+        </div>
+
+        <div class="filter-section">
+            <div class="filter-header">
+                <h3>🌍 Filter by Target Region</h3>
+                <button class="info-toggle" onclick="toggleLegend('target-legend')" title="Show/hide region codes guide">
+                    <span class="info-icon">ℹ️</span>
+                </button>
+            </div>
+            <div class="filter-buttons" id="target-filters">
+                <button class="filter-btn active" onclick="filterByTarget(null)">All Regions</button>
+                <!-- Dynamically populated -->
+            </div>
+            <div id="target-legend" class="filter-legend" style="display: none;">
+                <div class="legend-content">
+                    <strong>Common Target Region Codes:</strong>
+                    <div class="legend-grid">
+                        <div><code>Af</code> - Africa</div>
+                        <div><code>Am</code> - Americas</div>
+                        <div><code>As</code> - Asia</div>
+                        <div><code>Aus</code> - Australia</div>
+                        <div><code>CAf</code> - Central Africa</div>
+                        <div><code>CAm</code> - Central America</div>
+                        <div><code>CAs</code> - Central Asia</div>
+                        <div><code>EAf</code> - East Africa</div>
+                        <div><code>EAs</code> - East Asia</div>
+                        <div><code>ENA</code> - Eastern North America</div>
+                        <div><code>Eu</code> - Europe</div>
+                        <div><code>FE</code> - Far East</div>
+                        <div><code>ME</code> - Middle East</div>
+                        <div><code>NAf</code> - North Africa</div>
+                        <div><code>NAm</code> - North America</div>
+                        <div><code>Oc</code> - Oceania</div>
+                        <div><code>SAf</code> - South Africa</div>
+                        <div><code>SAm</code> - South America</div>
+                        <div><code>SAs</code> - South Asia</div>
+                        <div><code>SEA</code> - Southeast Asia</div>
+                        <div><code>SEu</code> - Southern Europe</div>
+                        <div><code>WAf</code> - West Africa</div>
+                        <div><code>WNA</code> - Western North America</div>
+                    </div>
+                    <small>Note: Regions indicate the intended target audience, not broadcast origin.</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="filter-section">
+            <div class="filter-header">
+                <h3>🗣️ Filter by Language</h3>
+                <button class="info-toggle" onclick="toggleLegend('language-legend')" title="Show/hide language information">
+                    <span class="info-icon">ℹ️</span>
+                </button>
+            </div>
+            <div class="filter-buttons" id="language-filters">
+                <button class="filter-btn active" onclick="filterByLanguage(null)">All Languages</button>
+                <!-- Dynamically populated -->
+            </div>
+            <div id="language-legend" class="filter-legend" style="display: none;">
+                <div class="legend-content">
+                    <strong>Language Codes:</strong>
+                    <p>Most languages are spelled out in full (e.g., "English", "Spanish", "Chinese"). Some broadcasts may use ISO language codes.</p>
+                    <div class="legend-grid">
+                        <div><code>A</code> - Arabic</div>
+                        <div><code>C</code> - Chinese (Mandarin)</div>
+                        <div><code>E</code> - English</div>
+                        <div><code>F</code> - French</div>
+                        <div><code>G</code> - German</div>
+                        <div><code>P</code> - Portuguese</div>
+                        <div><code>R</code> - Russian</div>
+                        <div><code>S</code> - Spanish</div>
+                    </div>
+                    <small>Hover over any language button to see the full name if abbreviated.</small>
+                </div>
             </div>
         </div>
 
@@ -83,9 +157,84 @@
         </div>
         
         <div class="tuning-content">
+            <!-- Mode Presets -->
+            <div class="tuning-section">
+                <h4>📡 Mode Presets</h4>
+                <div class="preset-buttons">
+                    <button class="preset-btn active" onclick="setModePreset('AM')">AM Broadcast</button>
+                    <button class="preset-btn" onclick="setModePreset('USB')">USB</button>
+                    <button class="preset-btn" onclick="setModePreset('LSB')">LSB</button>
+                    <button class="preset-btn" onclick="setModePreset('CW')">CW</button>
+                </div>
+            </div>
+
+            <!-- Filter Presets -->
+            <div class="tuning-section">
+                <h4>🎚️ Filter Bandwidth</h4>
+                <div class="preset-buttons">
+                    <button class="preset-btn" onclick="setFilterPreset('narrow')">Narrow (6 kHz)</button>
+                    <button class="preset-btn active" onclick="setFilterPreset('medium')">Medium (10 kHz)</button>
+                    <button class="preset-btn" onclick="setFilterPreset('wide')">Wide (15 kHz)</button>
+                    <button class="preset-btn" onclick="setFilterPreset('custom')">Custom</button>
+                </div>
+                <div class="tuning-control" id="custom-filter-controls" style="display: none;">
+                    <label>
+                        Low Edge (Hz):
+                        <input type="number" id="filter-low" value="-5000" step="100" onchange="updateFilter()">
+                    </label>
+                    <label>
+                        High Edge (Hz):
+                        <input type="number" id="filter-high" value="5000" step="100" onchange="updateFilter()">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Main Frequency with Quick Tune -->
+            <div class="tuning-section">
+                <h4>📻 Frequency Tuning</h4>
+                <div class="tuning-control">
+                    <label>
+                        Frequency (kHz):
+                        <div class="freq-control-group">
+                            <button class="freq-btn" onclick="adjustFrequency(-10)">-10</button>
+                            <button class="freq-btn" onclick="adjustFrequency(-5)">-5</button>
+                            <button class="freq-btn" onclick="adjustFrequency(-1)">-1</button>
+                            <input type="number" id="main-freq" value="0" step="1" onchange="updateFrequency(this.value)">
+                            <button class="freq-btn" onclick="adjustFrequency(1)">+1</button>
+                            <button class="freq-btn" onclick="adjustFrequency(5)">+5</button>
+                            <button class="freq-btn" onclick="adjustFrequency(10)">+10</button>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Fine Tuning (Shift) -->
+            <div class="tuning-section">
+                <h4>🔧 Fine Tuning (Shift)</h4>
+                <div class="tuning-control">
+                    <label>
+                        Shift (Hz):
+                        <div class="freq-control-group">
+                            <button class="freq-btn" onclick="adjustShift(-100)">-100</button>
+                            <button class="freq-btn" onclick="adjustShift(-10)">-10</button>
+                            <input type="number" id="shift-freq" value="0" step="10" onchange="updateShift(this.value)">
+                            <button class="freq-btn" onclick="adjustShift(10)">+10</button>
+                            <button class="freq-btn" onclick="adjustShift(100)">+100</button>
+                        </div>
+                    </label>
+                    <small>Fine-tune frequency (useful for off-frequency carriers)</small>
+                </div>
+                <div class="tuning-control">
+                    <div class="effective-frequency-display">
+                        <span class="label">Effective Frequency:</span>
+                        <span class="value" id="effective-frequency">0.000 kHz</span>
+                    </div>
+                </div>
+            </div>
+
             <!-- AGC Controls -->
             <div class="tuning-section">
-                <h4>AGC (Automatic Gain Control)</h4>
+                <h4>🎛️ AGC (Automatic Gain Control)</h4>
                 <div class="tuning-control">
                     <label>
                         <input type="checkbox" id="agc-enable" onchange="updateAGC()">
@@ -110,66 +259,47 @@
 
             <!-- Manual Gain Control -->
             <div class="tuning-section" id="manual-gain-section">
-                <h4>Manual Gain</h4>
+                <h4>🎚️ Manual Gain</h4>
                 <div class="tuning-control">
                     <label>
                         Gain (dB):
-                        <input type="range" id="manual-gain" min="-20" max="40" step="1" value="0" oninput="updateGain(this.value)">
-                        <span id="manual-gain-value">0</span>
+                        <input type="range" id="manual-gain" min="-20" max="60" step="1" value="30" oninput="updateGain(this.value)">
+                        <span id="manual-gain-value">30</span>
                     </label>
                 </div>
             </div>
 
-            <!-- Filter Controls -->
+            <!-- Squelch Control -->
             <div class="tuning-section">
-                <h4>Filter</h4>
+                <h4>🔇 Squelch</h4>
                 <div class="tuning-control">
                     <label>
-                        Low Edge (Hz):
-                        <input type="number" id="filter-low" value="-5000" step="100" onchange="updateFilter()">
+                        Threshold (dB):
+                        <input type="range" id="squelch-threshold" min="-80" max="0" step="1" value="-60" oninput="updateSquelch(this.value)">
+                        <span id="squelch-value">-60</span>
                     </label>
-                </div>
-                <div class="tuning-control">
-                    <label>
-                        High Edge (Hz):
-                        <input type="number" id="filter-high" value="5000" step="100" onchange="updateFilter()">
-                    </label>
-                </div>
-            </div>
-
-            <!-- Main Frequency -->
-            <div class="tuning-section">
-                <h4>Frequency</h4>
-                <div class="tuning-control">
-                    <label>
-                        Frequency (kHz):
-                        <input type="number" id="main-freq" value="0" step="5" onchange="updateFrequency(this.value)">
-                    </label>
-                    <small>Change the main tuning frequency</small>
-                </div>
-            </div>
-
-            <!-- Shift Frequency -->
-            <div class="tuning-section">
-                <h4>Fine Tuning (Shift)</h4>
-                <div class="tuning-control">
-                    <label>
-                        Shift (Hz):
-                        <input type="number" id="shift-freq" value="0" step="10" onchange="updateShift(this.value)">
-                    </label>
-                    <small>Fine-tune frequency (useful for CW/SSB)</small>
+                    <small>Audio mutes when signal falls below threshold</small>
                 </div>
             </div>
 
             <!-- Output Level -->
             <div class="tuning-section">
-                <h4>Output Level</h4>
+                <h4>🔊 Output Level</h4>
                 <div class="tuning-control">
                     <label>
                         Volume:
                         <input type="range" id="output-level" min="0" max="1" step="0.05" value="0.5" oninput="updateOutputLevel(this.value)">
                         <span id="output-level-value">0.50</span>
                     </label>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="tuning-section">
+                <h4>⚡ Quick Actions</h4>
+                <div class="preset-buttons">
+                    <button class="preset-btn" onclick="resetToDefaults()">↺ Reset to Defaults</button>
+                    <button class="preset-btn" onclick="savePreset()">💾 Save Preset</button>
                 </div>
             </div>
         </div>

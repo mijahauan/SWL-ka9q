@@ -7,8 +7,128 @@ let allStations = [];
 let frequencyData = [];
 let activeAudioSessions = new Map();
 let currentBandFilter = null;
+let currentTargetFilter = null;
+let currentLanguageFilter = null;
 let currentView = 'time'; // 'time' or 'frequency'
 let displayMode = 'table'; // 'table' or 'cards'
+
+// Target region code mappings for tooltips
+const TARGET_REGIONS = {
+    'Af': 'Africa',
+    'Am': 'Americas',
+    'As': 'Asia',
+    'Aus': 'Australia',
+    'CAf': 'Central Africa',
+    'CAm': 'Central America',
+    'CAs': 'Central Asia',
+    'EAf': 'East Africa',
+    'EAs': 'East Asia',
+    'ENA': 'Eastern North America',
+    'Eu': 'Europe',
+    'FE': 'Far East',
+    'ME': 'Middle East',
+    'NAf': 'North Africa',
+    'NAm': 'North America',
+    'Oc': 'Oceania',
+    'SAf': 'South Africa',
+    'SAm': 'South America',
+    'SAs': 'South Asia',
+    'SEA': 'Southeast Asia',
+    'SEu': 'Southern Europe',
+    'WAf': 'West Africa',
+    'WNA': 'Western North America'
+};
+
+// Language code mappings for tooltips (EiBi standard codes)
+const LANGUAGE_CODES = {
+    'A': 'Arabic',
+    'AL': 'Albanian',
+    'AM': 'Amharic',
+    'AR': 'Armenian',
+    'AZ': 'Azeri',
+    'B': 'Bulgarian',
+    'BE': 'Belarusian',
+    'BN': 'Bengali',
+    'BR': 'Burmese',
+    'C': 'Chinese (Mandarin)',
+    'CA': 'Cantonese',
+    'CC': 'Chinese (other)',
+    'CZ': 'Czech',
+    'D': 'Dutch',
+    'DA': 'Danish',
+    'DR': 'Dari',
+    'DZ': 'Dzongkha',
+    'E': 'English',
+    'EO': 'Esperanto',
+    'F': 'French',
+    'FA': 'Farsi/Persian',
+    'FI': 'Finnish',
+    'FS': 'Pashto',
+    'G': 'German',
+    'GR': 'Greek',
+    'H': 'Hebrew',
+    'HA': 'Hausa',
+    'HI': 'Hindi',
+    'HR': 'Croatian',
+    'HU': 'Hungarian',
+    'HY': 'Armenian',
+    'I': 'Italian',
+    'IN': 'Indonesian',
+    'J': 'Japanese',
+    'K': 'Korean',
+    'KA': 'Georgian',
+    'KH': 'Khmer',
+    'KU': 'Kurdish',
+    'L': 'Latin',
+    'LA': 'Lao',
+    'LT': 'Lithuanian',
+    'LV': 'Latvian',
+    'M': 'Multilingual',
+    'MK': 'Macedonian',
+    'ML': 'Malay',
+    'MN': 'Mongolian',
+    'NE': 'Nepali',
+    'NO': 'Norwegian',
+    'P': 'Portuguese',
+    'PL': 'Polish',
+    'PS': 'Pashto',
+    'R': 'Russian',
+    'RO': 'Romanian',
+    'S': 'Spanish',
+    'SC': 'Serbian/Croatian',
+    'SD': 'Sindhi',
+    'SI': 'Sinhala',
+    'SK': 'Slovak',
+    'SL': 'Slovenian',
+    'SO': 'Somali',
+    'SQ': 'Albanian',
+    'SR': 'Serbian',
+    'SW': 'Swahili',
+    'T': 'Turkish',
+    'TA': 'Tamil',
+    'TB': 'Tibetan',
+    'TG': 'Tagalog',
+    'TH': 'Thai',
+    'TI': 'Tigrinya',
+    'TJ': 'Tajik',
+    'TL': 'Tagalog',
+    'TM': 'Turkmen',
+    'TP': 'Tetum',
+    'TU': 'Turkish',
+    'UK': 'Ukrainian',
+    'UR': 'Urdu',
+    'UZ': 'Uzbek',
+    'V': 'Vietnamese',
+    'VT': 'Vietnamese',
+    'YI': 'Yiddish',
+    'ZU': 'Zulu',
+    // Special codes
+    'DO': 'Various/Multiple',
+    'MX': 'Music',
+    'VN': 'Various',
+    '-E': 'English',
+    '-S': 'Spanish'
+};
 
 /**
  * Audio Session Manager
@@ -198,12 +318,55 @@ async function loadStations() {
         console.log(`✅ Loaded ${allStations.length} station schedules`);
         console.log(`✅ Loaded ${frequencyData.length} unique frequencies`);
         
+        populateFilters();
         renderStations();
         updateStats();
     } catch (error) {
         console.error('Error loading stations:', error);
         showError('Failed to load station data. Please check your connection.');
     }
+}
+
+/**
+ * Populate target and language filter buttons dynamically
+ */
+function populateFilters() {
+    // Extract unique targets
+    const targets = new Set();
+    const languages = new Set();
+    
+    allStations.forEach(station => {
+        if (station.target && station.target.trim()) {
+            targets.add(station.target.trim());
+        }
+        if (station.language && station.language.trim()) {
+            languages.add(station.language.trim());
+        }
+    });
+    
+    // Sort alphabetically
+    const sortedTargets = Array.from(targets).sort();
+    const sortedLanguages = Array.from(languages).sort();
+    
+    // Populate target filters with tooltips
+    const targetContainer = document.getElementById('target-filters');
+    const targetButtons = sortedTargets.map(target => {
+        const tooltip = TARGET_REGIONS[target] || target;
+        const displayText = target;
+        return `<button class="filter-btn" onclick="filterByTarget('${target.replace(/'/g, "\\'")}')" title="${tooltip}">${displayText}</button>`;
+    }).join('');
+    targetContainer.innerHTML = `<button class="filter-btn active" onclick="filterByTarget(null)" title="Show all target regions">All Regions</button>${targetButtons}`;
+    
+    // Populate language filters with tooltips
+    const languageContainer = document.getElementById('language-filters');
+    const languageButtons = sortedLanguages.map(language => {
+        const tooltip = LANGUAGE_CODES[language] || language;
+        const displayText = language;
+        return `<button class="filter-btn" onclick="filterByLanguage('${language.replace(/'/g, "\\'")}')" title="${tooltip}">${displayText}</button>`;
+    }).join('');
+    languageContainer.innerHTML = `<button class="filter-btn active" onclick="filterByLanguage(null)" title="Show all languages">All Languages</button>${languageButtons}`;
+    
+    console.log(`✅ Populated ${sortedTargets.length} target regions and ${sortedLanguages.length} languages`);
 }
 
 /**
@@ -254,7 +417,7 @@ function renderTimeView() {
     const container = document.getElementById('stations-container');
     const searchTerm = document.getElementById('search').value.toLowerCase();
     
-    // Filter stations (show all, but filter by band and search only)
+    // Filter stations (show all, but filter by band, target, language, and search)
     let filteredStations = allStations.filter(station => {
         // Band filter
         if (currentBandFilter) {
@@ -263,6 +426,16 @@ function renderTimeView() {
             if (station.frequency < minFreq * 1e6 || station.frequency > maxFreq * 1e6) {
                 return false;
             }
+        }
+        
+        // Target filter
+        if (currentTargetFilter && station.target !== currentTargetFilter) {
+            return false;
+        }
+        
+        // Language filter
+        if (currentLanguageFilter && station.language !== currentLanguageFilter) {
+            return false;
         }
         
         // Search filter
@@ -306,8 +479,40 @@ function renderFrequencyView() {
     const container = document.getElementById('stations-container');
     const searchTerm = document.getElementById('search').value.toLowerCase();
     
-    // Filter frequencies
-    let filteredFreqs = frequencyData.filter(freq => {
+    // Filter frequencies and their schedules
+    let filteredFreqs = frequencyData.map(freq => {
+        // Clone the frequency object
+        const filteredFreq = { ...freq };
+        
+        // Filter schedules within this frequency
+        filteredFreq.schedules = freq.schedules.filter(schedule => {
+            // Target filter
+            if (currentTargetFilter && schedule.target !== currentTargetFilter) {
+                return false;
+            }
+            
+            // Language filter
+            if (currentLanguageFilter && schedule.language !== currentLanguageFilter) {
+                return false;
+            }
+            
+            // Search filter
+            if (searchTerm) {
+                const searchableText = [
+                    schedule.station,
+                    schedule.language,
+                    schedule.target,
+                    schedule.location || ''
+                ].join(' ').toLowerCase();
+                
+                if (!searchableText.includes(searchTerm)) return false;
+            }
+            
+            return true;
+        });
+        
+        return filteredFreq;
+    }).filter(freq => {
         // Band filter
         if (currentBandFilter) {
             const [minFreq, maxFreq] = currentBandFilter;
@@ -317,20 +522,8 @@ function renderFrequencyView() {
             }
         }
         
-        // Search filter
-        if (searchTerm) {
-            const searchableText = [
-                freq.station || '',
-                freq.frequency.toString(),
-                freq.location || '',
-                freq.target || '',
-                ...freq.schedules.map(s => `${s.station} ${s.language} ${s.target}`)
-            ].join(' ').toLowerCase();
-            
-            if (!searchableText.includes(searchTerm)) return false;
-        }
-        
-        return true;
+        // Only include frequencies that have at least one schedule after filtering
+        return freq.schedules.length > 0;
     });
     
     // Sort by frequency
@@ -732,6 +925,52 @@ function filterByBand(minFreq, maxFreq) {
 }
 
 /**
+ * Filter by target region
+ */
+function filterByTarget(target) {
+    // Remove active class from all buttons
+    document.querySelectorAll('#target-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
+    
+    // Set current filter
+    currentTargetFilter = target;
+    
+    // Add active class to clicked button
+    event.target.classList.add('active');
+    
+    console.log(`🌍 Filtering by target: ${target || 'All Regions'}`);
+    renderStations();
+}
+
+/**
+ * Filter by language
+ */
+function filterByLanguage(language) {
+    // Remove active class from all buttons
+    document.querySelectorAll('#language-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
+    
+    // Set current filter
+    currentLanguageFilter = language;
+    
+    // Add active class to clicked button
+    event.target.classList.add('active');
+    
+    console.log(`🗣️ Filtering by language: ${language || 'All Languages'}`);
+    renderStations();
+}
+
+/**
+ * Toggle visibility of filter legend/guide
+ */
+function toggleLegend(legendId) {
+    const legend = document.getElementById(legendId);
+    if (legend.style.display === 'none') {
+        legend.style.display = 'block';
+    } else {
+        legend.style.display = 'none';
+    }
+}
+
+/**
  * Reload schedules from server
  */
 async function reloadSchedules() {
@@ -765,6 +1004,24 @@ function showError(message) {
 
 let currentTuningSSRC = null;
 let currentTuningStation = null;
+let currentMode = 'AM';
+let currentFilterPreset = 'medium';
+
+// Mode presets with appropriate filter settings
+const MODE_PRESETS = {
+    AM: { low: -5000, high: 5000, shift: 0 },
+    USB: { low: 200, high: 2800, shift: 0 },
+    LSB: { low: -2800, high: -200, shift: 0 },
+    CW: { low: -250, high: 250, shift: 800 }
+};
+
+// Filter bandwidth presets for AM
+const FILTER_PRESETS = {
+    narrow: { low: -3000, high: 3000 },
+    medium: { low: -5000, high: 5000 },
+    wide: { low: -7500, high: 7500 },
+    custom: null
+};
 
 /**
  * Open tuning panel for a specific SSRC
@@ -779,18 +1036,226 @@ function openTuningPanel(ssrc, station) {
     stationInfo.textContent = `${station.station} - ${(station.frequency / 1000).toFixed(1)} kHz`;
     panel.style.display = 'block';
     
-    // Reset to defaults
-    document.getElementById('agc-enable').checked = false; // AGC disabled by default
+    // Load saved settings or use defaults
+    const savedSettings = loadSavedSettings(station.frequency);
+    
+    document.getElementById('agc-enable').checked = savedSettings.agcEnable || false;
+    document.getElementById('manual-gain').value = savedSettings.gain || 30;
+    document.getElementById('manual-gain-value').textContent = savedSettings.gain || '30';
+    document.getElementById('filter-low').value = savedSettings.filterLow || -5000;
+    document.getElementById('filter-high').value = savedSettings.filterHigh || 5000;
+    document.getElementById('main-freq').value = (station.frequency / 1000).toFixed(1);
+    document.getElementById('shift-freq').value = savedSettings.shift || 0;
+    document.getElementById('output-level').value = savedSettings.outputLevel || 0.5;
+    document.getElementById('output-level-value').textContent = (savedSettings.outputLevel || 0.5).toFixed(2);
+    document.getElementById('squelch-threshold').value = savedSettings.squelch || -60;
+    document.getElementById('squelch-value').textContent = savedSettings.squelch || '-60';
+    
+    // Set mode and filter preset based on saved settings
+    currentMode = savedSettings.mode || 'AM';
+    currentFilterPreset = savedSettings.filterPreset || 'medium';
+    
+    // Update UI to reflect current mode
+    updateModeButtons();
+    updateFilterButtons();
+    updateAGC();
+    
+    // Update effective frequency display
+    updateEffectiveFrequencyDisplay();
+}
+
+/**
+ * Load saved settings for a frequency from localStorage
+ */
+function loadSavedSettings(frequency) {
+    try {
+        const key = `tuning_${frequency}`;
+        const saved = localStorage.getItem(key);
+        return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+/**
+ * Save current tuning settings
+ */
+function savePreset() {
+    if (!currentTuningStation) return;
+    
+    const settings = {
+        mode: currentMode,
+        filterPreset: currentFilterPreset,
+        agcEnable: document.getElementById('agc-enable').checked,
+        gain: parseFloat(document.getElementById('manual-gain').value),
+        filterLow: parseFloat(document.getElementById('filter-low').value),
+        filterHigh: parseFloat(document.getElementById('filter-high').value),
+        shift: parseFloat(document.getElementById('shift-freq').value),
+        outputLevel: parseFloat(document.getElementById('output-level').value),
+        squelch: parseFloat(document.getElementById('squelch-threshold').value)
+    };
+    
+    try {
+        const key = `tuning_${currentTuningStation.frequency}`;
+        localStorage.setItem(key, JSON.stringify(settings));
+        console.log('✅ Settings saved for', currentTuningStation.station);
+        
+        // Visual feedback
+        const btn = event.target;
+        btn.textContent = '✓ Saved!';
+        setTimeout(() => {
+            btn.textContent = '💾 Save Preset';
+        }, 2000);
+    } catch (e) {
+        console.error('❌ Failed to save settings:', e);
+    }
+}
+
+/**
+ * Reset all tuning controls to defaults
+ */
+function resetToDefaults() {
+    // Reset to AM mode with medium filter
+    setModePreset('AM');
+    setFilterPreset('medium');
+    
+    // Reset other controls
+    document.getElementById('agc-enable').checked = false;
     document.getElementById('manual-gain').value = 30;
     document.getElementById('manual-gain-value').textContent = '30';
-    document.getElementById('filter-low').value = -5000;
-    document.getElementById('filter-high').value = 5000;
-    document.getElementById('main-freq').value = (station.frequency / 1000).toFixed(1); // Set current frequency in kHz
     document.getElementById('shift-freq').value = 0;
     document.getElementById('output-level').value = 0.5;
     document.getElementById('output-level-value').textContent = '0.50';
+    document.getElementById('squelch-threshold').value = -60;
+    document.getElementById('squelch-value').textContent = '-60';
     
+    // Apply changes
     updateAGC();
+    updateGain(30);
+    updateShift(0);
+    updateOutputLevel(0.5);
+    updateSquelch(-60);
+    updateEffectiveFrequencyDisplay();
+    
+    console.log('✅ Reset to defaults');
+}
+
+/**
+ * Set mode preset (AM, USB, LSB, CW)
+ */
+function setModePreset(mode) {
+    if (!currentTuningSSRC || !MODE_PRESETS[mode]) return;
+    
+    currentMode = mode;
+    const preset = MODE_PRESETS[mode];
+    
+    // Update filter based on mode
+    document.getElementById('filter-low').value = preset.low;
+    document.getElementById('filter-high').value = preset.high;
+    document.getElementById('shift-freq').value = preset.shift;
+    
+    // Apply changes
+    updateFilter();
+    updateShift(preset.shift);
+    
+    // Update button states
+    updateModeButtons();
+    
+    console.log(`✅ Mode set to ${mode}`);
+}
+
+/**
+ * Update mode button states
+ */
+function updateModeButtons() {
+    const buttons = document.querySelectorAll('.tuning-section:first-child .preset-btn');
+    buttons.forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.textContent.includes(currentMode)) {
+            btn.classList.add('active');
+        }
+    });
+}
+
+/**
+ * Set filter preset (narrow, medium, wide, custom)
+ */
+function setFilterPreset(preset) {
+    if (!currentTuningSSRC) return;
+    
+    currentFilterPreset = preset;
+    
+    if (preset === 'custom') {
+        // Show custom filter controls
+        document.getElementById('custom-filter-controls').style.display = 'block';
+    } else {
+        // Hide custom filter controls and apply preset
+        document.getElementById('custom-filter-controls').style.display = 'none';
+        
+        const filterSettings = FILTER_PRESETS[preset];
+        if (filterSettings) {
+            document.getElementById('filter-low').value = filterSettings.low;
+            document.getElementById('filter-high').value = filterSettings.high;
+            updateFilter();
+        }
+    }
+    
+    // Update button states
+    updateFilterButtons();
+    
+    console.log(`✅ Filter preset set to ${preset}`);
+}
+
+/**
+ * Update filter button states
+ */
+function updateFilterButtons() {
+    const buttons = document.querySelectorAll('.tuning-section:nth-child(2) .preset-btn');
+    buttons.forEach(btn => {
+        btn.classList.remove('active');
+        const btnText = btn.textContent.toLowerCase();
+        if (btnText.includes(currentFilterPreset)) {
+            btn.classList.add('active');
+        }
+    });
+}
+
+/**
+ * Update effective frequency display (main freq + shift)
+ */
+function updateEffectiveFrequencyDisplay() {
+    const mainFreq = parseFloat(document.getElementById('main-freq').value) || 0;
+    const shift = parseFloat(document.getElementById('shift-freq').value) || 0;
+    const effectiveFreq = mainFreq + (shift / 1000); // Convert shift from Hz to kHz
+    
+    const display = document.getElementById('effective-frequency');
+    if (display) {
+        display.textContent = `${effectiveFreq.toFixed(3)} kHz`;
+    }
+}
+
+/**
+ * Adjust frequency by a delta (in kHz)
+ */
+function adjustFrequency(deltaKHz) {
+    const input = document.getElementById('main-freq');
+    const currentFreq = parseFloat(input.value) || 0;
+    const newFreq = currentFreq + deltaKHz;
+    input.value = newFreq.toFixed(1);
+    updateFrequency(newFreq.toFixed(1));
+    updateEffectiveFrequencyDisplay();
+}
+
+/**
+ * Adjust shift by a delta (in Hz)
+ */
+function adjustShift(deltaHz) {
+    const input = document.getElementById('shift-freq');
+    const currentShift = parseFloat(input.value) || 0;
+    const newShift = currentShift + deltaHz;
+    input.value = newShift;
+    updateShift(newShift);
+    updateEffectiveFrequencyDisplay();
 }
 
 /**
@@ -917,6 +1382,8 @@ async function updateFrequency(value) {
     const frequencyHz = parseFloat(value) * 1000; // Convert kHz to Hz
     console.log(`📻 Updating frequency for SSRC ${currentTuningSSRC}: ${value} kHz (${frequencyHz} Hz)`);
     
+    updateEffectiveFrequencyDisplay();
+    
     try {
         const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/frequency`, {
             method: 'POST',
@@ -942,6 +1409,8 @@ async function updateShift(value) {
     if (!currentTuningSSRC) return;
     
     console.log(`🎛️ Updating shift for SSRC ${currentTuningSSRC}: ${value} Hz`);
+    
+    updateEffectiveFrequencyDisplay();
     
     try {
         const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/shift`, {
@@ -985,6 +1454,33 @@ async function updateOutputLevel(value) {
         }
     } catch (error) {
         console.error('❌ Error updating output level:', error);
+    }
+}
+
+/**
+ * Update squelch threshold
+ */
+async function updateSquelch(value) {
+    if (!currentTuningSSRC) return;
+    
+    document.getElementById('squelch-value').textContent = value;
+    console.log(`🔇 Updating squelch for SSRC ${currentTuningSSRC}: ${value} dB`);
+    
+    try {
+        const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/squelch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ threshold: parseFloat(value) })
+        });
+        
+        const data = await response.json();
+        if (!response.ok) {
+            console.error('❌ Failed to update squelch:', data);
+        } else {
+            console.log('✅ Squelch updated successfully');
+        }
+    } catch (error) {
+        console.error('❌ Error updating squelch:', error);
     }
 }
 

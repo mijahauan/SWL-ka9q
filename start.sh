@@ -6,6 +6,7 @@
 CONFIG_FILE=".radiod-hostname"
 
 # Color codes for output
+RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
@@ -13,6 +14,30 @@ NC='\033[0m' # No Color
 
 echo -e "${BLUE}🚀 SWL-ka9q Startup${NC}"
 echo ""
+
+# Check if Python venv exists
+if [ ! -d "venv" ] || [ ! -f "venv/bin/python3" ]; then
+    echo -e "${YELLOW}⚠️  Python virtual environment not found${NC}"
+    echo ""
+    echo "First-time setup required. Please run:"
+    echo -e "  ${GREEN}npm run setup${NC}"
+    echo ""
+    echo "Or manually:"
+    echo -e "  ${GREEN}./setup-venv.sh${NC}"
+    echo -e "  ${GREEN}npm install${NC}"
+    echo ""
+    exit 1
+fi
+
+# Check if node_modules exists
+if [ ! -d "node_modules" ]; then
+    echo -e "${YELLOW}⚠️  Node.js dependencies not installed${NC}"
+    echo ""
+    echo "Please run:"
+    echo -e "  ${GREEN}npm install${NC}"
+    echo ""
+    exit 1
+fi
 
 # Check if hostname is already configured
 if [ -f "$CONFIG_FILE" ]; then

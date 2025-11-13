@@ -99,6 +99,26 @@ A web-based interface for monitoring shortwave broadcast stations with live audi
 
 ## Installation
 
+### Quick Start (One Command)
+
+```bash
+git clone https://github.com/mijahauan/SWL-ka9q.git
+cd SWL-ka9q
+npm run setup && npm start
+```
+
+The setup script handles everything automatically and guides you through configuration.
+
+**Note for Debian/Ubuntu users:** If you get a Python error about "externally-managed-environment", install the venv package first:
+```bash
+sudo apt install python3-venv
+npm run setup && npm start
+```
+
+📘 **For detailed installation instructions and troubleshooting, see [INSTALL.md](INSTALL.md)**
+
+### Manual Setup (Alternative)
+
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/mijahauan/SWL-ka9q.git
@@ -110,14 +130,16 @@ A web-based interface for monitoring shortwave broadcast stations with live audi
    ./setup-venv.sh
    ```
    This creates a `venv/` directory and installs the **custom ka9q-python package from GitHub** (not available on PyPI).
+   
+   **Debian/Ubuntu users:** You may need to install `python3-venv` first:
+   ```bash
+   sudo apt install python3-venv
+   ```
 
 3. **Install Node.js dependencies:**
    ```bash
-   pnpm install
-   # or: npm install
+   npm install
    ```
-   
-   **Note for existing installations:** If updating from an earlier version, run `pnpm install` again to sync dependencies with the updated `package.json` (Opus libraries were removed).
 
 4. **Broadcast schedules included:**
    - `bc-time.txt` contains 7337 EiBi broadcast schedules

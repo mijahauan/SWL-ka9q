@@ -15,15 +15,31 @@ python3 --version
 ps aux | grep radiod
 ```
 
+**Debian/Ubuntu users:** Install Python venv package first to avoid setup errors:
+```bash
+sudo apt install python3-venv
+```
+
 ## Installation
 
+**One command (recommended):**
+```bash
+npm run setup
+```
+
+**Or manually:**
 ```bash
 # 1. Set up Python virtual environment and install ka9q-python
 ./setup-venv.sh
 
 # 2. Install Node.js dependencies
-pnpm install
-# or: npm install
+npm install
+```
+
+**If you get "externally-managed-environment" error:**
+```bash
+sudo apt install python3-venv
+npm run setup
 ```
 
 ## Start the Server
