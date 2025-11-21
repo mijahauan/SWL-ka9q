@@ -97,4 +97,6 @@ fi
 
 # Start the server
 export RADIOD_HOSTNAME
+export KA9Q_MULTICAST_INTERFACE
+export RADIOD_AUDIO_MULTICAST
 exec node server.js
