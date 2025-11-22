@@ -19,11 +19,12 @@ new_schedule.txt
 bc-time.backup.*.txt
 bc-freq.backup.*.txt
 
-# Environment variables
+# Environment variables and local config
 .env
 .env.local
 .env.*.local
 .radiod-hostname
+.radiod-multicast
 
 # Logs
 logs/
@@ -43,3 +44,4 @@ Thumbs.db
 # Temporary files
 *.tmp
 temp/
+test_audio.py

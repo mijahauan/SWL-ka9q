@@ -1,16 +1,38 @@
 # Installation Guide
 
-Quick and easy setup for SWL-ka9q.
+Complete installation guide for SWL-ka9q - from fresh system to running server.
 
-## One-Command Setup
+## Quick Install (Recommended)
+
+For a brand new installation with automatic environment setup:
+
+```bash
+git clone https://github.com/mijahauan/SWL-ka9q.git
+cd SWL-ka9q
+./install.sh
+```
+
+The installation wizard will:
+- ✅ Check all system requirements
+- ✅ Install Node.js and Python dependencies
+- ✅ Create a fresh Python virtual environment
+- ✅ Install ka9q-python package
+- ✅ Test radiod connectivity
+- ✅ Detect network configuration
+- ✅ Warn about potential multicast routing issues
+
+**After installation completes**, start the server:
+```bash
+./start.sh
+```
+
+## Legacy Quick Setup
 
 ```bash
 git clone https://github.com/mijahauan/SWL-ka9q.git
 cd SWL-ka9q
 npm run setup && npm start
 ```
-
-That's it! The setup script will guide you through configuration.
 
 ---
 
@@ -159,6 +181,108 @@ npm install
 # 3. Start server
 npm start
 ```
+
+---
+
+## Network Topology and Deployment
+
+### Where Should I Run SWL-ka9q?
+
+The location of your SWL-ka9q server relative to radiod affects performance due to multicast packet routing.
+
+#### ⭐⭐⭐⭐⭐ Best: Same Machine as radiod
+
+```
+┌─────────────────┐
+│   radiod + SWL  │ ← Everything on one machine
+└─────────────────┘
+```
+
+**Performance**: Perfect multicast reception, zero network overhead
+
+```bash
+# On the radiod machine
+git clone https://github.com/mijahauan/SWL-ka9q.git
+cd SWL-ka9q
+./install.sh
+# Select "localhost" when prompted for radiod hostname
+```
+
+#### ⭐⭐⭐⭐☆ Very Good: Same Network Switch
+
+```
+┌──────────┐     ┌──────────┐
+│  radiod  │────┤          │
+└──────────┘    │  Switch  │
+                │  (IGMP)  │
+┌──────────┐    │          │
+│   SWL    │────┤          │
+└──────────┘    └──────────┘
+```
+
+**Performance**: Excellent, multicast works via IGMP
+**Requirements**: 
+- Both machines on same switch
+- IGMP snooping properly configured
+- Network interface properly detected by install script
+
+```bash
+# On the SWL machine
+git clone https://github.com/mijahauan/SWL-ka9q.git
+cd SWL-ka9q
+./install.sh
+# Enter radiod hostname when prompted (e.g., bee1-hf-status.local)
+```
+
+#### ⭐⭐☆☆☆ Limited: Across IGMP-Aware Switches
+
+```
+┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
+│  radiod  │────┤ Switch 1 │────┤ Switch 2 │────│   SWL    │
+└──────────┘    │  (IGMP)  │     │  (IGMP)  │     └──────────┘
+                └──────────┘     └──────────┘
+```
+
+**Performance**: May have issues with packet loss and stuttering
+**Why**: Multicast routing across switches can drop packets
+**Symptoms**: 
+- Choppy/stuttering audio
+- Low packet reception rate (~2 packets/sec instead of ~50/sec)
+- Intermittent dropouts
+
+**Not Recommended** unless absolutely necessary.
+
+### Checking Your Network Setup
+
+After running `./install.sh`, the script will:
+
+1. Detect your network interfaces
+2. Test connectivity to radiod
+3. Warn if you're in a potentially problematic network topology
+
+**To manually verify multicast reception:**
+
+```bash
+# On the SWL machine, after starting the server
+# You should see this in the logs:
+✅ Joined radiod audio group: 239.113.49.249:5004
+📊 SSRC 9455000: 500 RTP packets received  # Should be ~500 every 10 seconds
+```
+
+If you see very low packet counts (~20 instead of ~500), you likely have a multicast routing issue.
+
+### Moving Between Machines
+
+If you're moving SWL-ka9q to a different machine:
+
+```bash
+# On new machine
+git clone https://github.com/mijahauan/SWL-ka9q.git
+cd SWL-ka9q
+./install.sh  # Creates fresh venv for this system
+```
+
+**Don't copy the `venv/` directory** - it contains absolute paths specific to the original machine and will break. Always run `./install.sh` to create a fresh virtual environment.
 
 ---
 

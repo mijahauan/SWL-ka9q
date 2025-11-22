@@ -99,7 +99,32 @@ A web-based interface for monitoring shortwave broadcast stations with live audi
 
 ## Installation
 
-### Quick Start (One Command)
+### 🆕 Recommended: Guided Installation Wizard
+
+For a **fresh, greenfield installation** on a new machine:
+
+```bash
+git clone https://github.com/mijahauan/SWL-ka9q.git
+cd SWL-ka9q
+./install.sh
+```
+
+The installation wizard will:
+- ✅ Check all system requirements (Node.js, Python 3, venv)
+- ✅ Create a fresh Python virtual environment
+- ✅ Install all dependencies automatically
+- ✅ Test radiod connectivity
+- ✅ Detect network configuration issues
+- ✅ Warn about multicast routing problems
+
+**Then start the server:**
+```bash
+./start.sh
+```
+
+📘 **For complete details on network topology and deployment scenarios, see [INSTALL.md](INSTALL.md)**
+
+### Legacy Quick Start
 
 ```bash
 git clone https://github.com/mijahauan/SWL-ka9q.git
@@ -107,15 +132,7 @@ cd SWL-ka9q
 npm run setup && npm start
 ```
 
-The setup script handles everything automatically and guides you through configuration.
-
-**Note for Debian/Ubuntu users:** If you get a Python error about "externally-managed-environment", install the venv package first:
-```bash
-sudo apt install python3-venv
-npm run setup && npm start
-```
-
-📘 **For detailed installation instructions and troubleshooting, see [INSTALL.md](INSTALL.md)**
+**Note:** If you're moving between machines, always run `./install.sh` to create a fresh environment. Don't copy the `venv/` directory - it contains machine-specific paths.
 
 ### Manual Setup (Alternative)
 
