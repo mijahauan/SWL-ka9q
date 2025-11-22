@@ -1,5 +1,46 @@
 # Troubleshooting Audio Streaming
 
+## Error: "Cannot discover multicast address" (Remote Client)
+
+This error occurs when running SWL-ka9q on a different machine than radiod and the multicast fallback address is not configured.
+
+### Quick Fix
+
+The startup script now automatically discovers multicast addresses from radiod:
+
+```bash
+./start.sh
+# When prompted for radiod hostname, enter: bee1-hf-status.local
+# The script will discover and present available multicast addresses
+# Select one or press Enter to use the first
+```
+
+### Manual Fix
+
+If automatic discovery fails, set the environment variable manually:
+
+```bash
+export RADIOD_AUDIO_MULTICAST=239.113.49.249
+./start.sh
+```
+
+Common radiod multicast addresses you can try:
+- `239.113.49.249` (USB/AM channels - most common)
+- `239.160.155.125` (USB/AM channels - receiver 2)
+- `239.179.238.97` (USB/AM channels - receiver 3)
+- `239.103.26.231` (IQ channels)
+
+### Testing Discovery
+
+Test the discovery script directly:
+
+```bash
+source venv/bin/activate
+python3 discover_multicast.py --radiod-host bee1-hf-status.local --duration 3
+```
+
+This should output JSON with available multicast addresses.
+
 ## Error: "Failed to start audio stream"
 
 This error occurs when the Python ka9q integration cannot create an audio channel. Follow these steps to diagnose:

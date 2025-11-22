@@ -139,6 +139,51 @@ Once `RADIOD_HOSTNAME` is set correctly, SWL-ka9q will:
 
 The default settings for ports and multicast addresses work with standard ka9q-radio installations.
 
+## Remote Radiod Configuration (Automatic Discovery)
+
+When running SWL-ka9q on a **different machine** than radiod, the startup script automatically discovers available multicast addresses from radiod. This is required for creating new audio channels.
+
+### How It Works
+
+1. Run `./start.sh` with a remote radiod hostname
+2. The script connects to radiod and discovers active channels
+3. Available multicast addresses are extracted and presented to you
+4. Select one (or press Enter to use the first one)
+5. The address is saved as `RADIOD_AUDIO_MULTICAST` environment variable
+
+### Example Session
+
+```
+📡 Remote radiod detected: bee1-hf-status.local
+
+Discovering available multicast groups from radiod...
+
+Discovered multicast addresses from radiod:
+  1) 239.103.26.231
+  2) 239.113.49.249
+  3) 239.160.155.125
+  4) 239.179.238.97
+
+Enter option [1-4] or full address (or press Enter to use first): 2
+
+✅ Using fallback multicast: 239.113.49.249
+```
+
+### Manual Configuration (Optional)
+
+If automatic discovery fails or you want to specify manually:
+
+```bash
+export RADIOD_AUDIO_MULTICAST=239.113.49.249
+./start.sh
+```
+
+Or make it permanent:
+
+```bash
+echo 'export RADIOD_AUDIO_MULTICAST=239.113.49.249' >> ~/.bashrc
+```
+
 ## Advanced Configuration (Optional)
 
 If you need to customize other settings, edit `server.js`:

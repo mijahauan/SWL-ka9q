@@ -155,6 +155,7 @@ npm run setup && npm start
    ```bash
    npm start
    # You'll be prompted to enter the radiod hostname on first run
+   # For remote radiod, multicast addresses will be discovered automatically
    ```
    
    **Or set manually if radiod is on a different machine:**
@@ -162,6 +163,8 @@ npm run setup && npm start
    export RADIOD_HOSTNAME=192.168.1.100
    npm run start-direct
    ```
+   
+   **Remote radiod setup:** When connecting to radiod on a different machine, the startup script automatically discovers available multicast addresses from radiod and prompts you to select one for creating new channels. No manual configuration needed!
    
    **See [CONFIGURATION.md](CONFIGURATION.md) and [QUICKSTART.md](QUICKSTART.md) for detailed setup.**
 

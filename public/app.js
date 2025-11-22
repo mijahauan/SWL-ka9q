@@ -147,19 +147,26 @@ class AudioSession {
         this.maxReconnectAttempts = 5;
         this.intentionallyStopped = false;
         this.nextPlayTime = 0; // Track scheduled audio time
+        this.audioStarted = false; // Track if we've started audio playback
+        this.audioBuffer = []; // Buffer to smooth out packet arrival jitter
+        this.minBufferSize = 5; // Wait for 5 packets before starting playback
     }
 
     async start() {
         console.log(`🎵 Starting audio session for ${this.frequency / 1000} kHz (SSRC: ${this.ssrc})`);
         
-        // Reset the intentionally stopped flag when starting
+        // Reset state when starting
         this.intentionallyStopped = false;
+        this.audioStarted = false;
+        this.audioBuffer = [];
+        this.nextPlayTime = 0;
         
         try {
             // Create Web Audio API context
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
                 sampleRate: 12000
             });
+            console.log(`🔊 AudioContext created with state: ${this.audioContext.state}`);
             
             // Connect to WebSocket
             this.ws = new WebSocket(this.websocketUrl);
@@ -167,8 +174,16 @@ class AudioSession {
             
             let packetCount = 0;
             
-            this.ws.onopen = () => {
+            this.ws.onopen = async () => {
                 console.log(`✅ WebSocket connected for ${this.frequency / 1000} kHz`);
+                
+                // Resume AudioContext if suspended (required by browsers)
+                if (this.audioContext.state === 'suspended') {
+                    console.log('🔊 Resuming AudioContext...');
+                    await this.audioContext.resume();
+                    console.log(`🔊 AudioContext state: ${this.audioContext.state}`);
+                }
+                
                 // Send start command
                 this.ws.send('A:START');
                 this.isPlaying = true;
@@ -231,19 +246,35 @@ class AudioSession {
                 channelData[i] = pcmData[i] / 32768.0; // Convert to -1.0 to 1.0
             }
             
-            // Schedule audio buffer to play without gaps
-            if (this.isPlaying) {
-                const source = this.audioContext.createBufferSource();
-                source.buffer = audioBuffer;
-                source.connect(this.audioContext.destination);
-                
-                // Schedule to play at nextPlayTime, or immediately if we're behind
+            // Add to buffer for jitter smoothing
+            this.audioBuffer.push(audioBuffer);
+            
+            // Start playback once we have enough buffered
+            if (!this.audioStarted && this.audioBuffer.length >= this.minBufferSize) {
+                this.audioStarted = true;
                 const now = this.audioContext.currentTime;
-                const playTime = Math.max(now, this.nextPlayTime);
-                source.start(playTime);
-                
-                // Update next play time
-                this.nextPlayTime = playTime + audioBuffer.duration;
+                this.nextPlayTime = now + 0.1; // Start 100ms in future for initial buffering
+                console.log(`🎵 Starting audio playback with ${this.audioBuffer.length} buffered packets`);
+            }
+            
+            // Schedule buffered audio for playback
+            if (this.audioStarted && this.isPlaying) {
+                while (this.audioBuffer.length > 0) {
+                    const buffer = this.audioBuffer.shift();
+                    const source = this.audioContext.createBufferSource();
+                    source.buffer = buffer;
+                    source.connect(this.audioContext.destination);
+                    
+                    const now = this.audioContext.currentTime;
+                    // If we've fallen behind, resync with a small buffer
+                    if (this.nextPlayTime < now) {
+                        this.nextPlayTime = now + 0.05; // 50ms buffer
+                        console.log(`⏩ Audio resync: catching up`);
+                    }
+                    
+                    source.start(this.nextPlayTime);
+                    this.nextPlayTime += buffer.duration;
+                }
             }
         } catch (error) {
             console.error('Error processing PCM packet:', error);

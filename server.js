@@ -314,8 +314,8 @@ class Ka9qRadioProxy extends EventEmitter {
       const now = Date.now();
       const lastLog = lastLogTime.get(ssrc) || 0;
       
-      // Debug: log packet rate for active SSRCs every 2 seconds
-      if (now - lastLog > 2000) {
+      // Debug: log packet rate for active SSRCs every 10 seconds
+      if (now - lastLog > 10000) {
         const count = packetCounts.get(ssrc);
         const fwdCount = forwardedCounts.get(ssrc) || 0;
         console.log(`📊 SSRC ${ssrc}: ${count} RTP packets received, ${fwdCount} forwarded to browser`);
