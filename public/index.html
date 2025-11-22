@@ -66,7 +66,7 @@
             <div class="filter-header">
                 <h3>🌍 Filter by Target Region</h3>
                 <div class="filter-header-buttons">
-                    <button class="collapse-toggle" onclick="toggleFilterSection('target-filters')" title="Collapse/expand filter">
+                    <button class="collapse-toggle collapsed" onclick="toggleFilterSection('target-filters')" title="Collapse/expand filter">
                         <span class="collapse-icon">▼</span>
                     </button>
                     <button class="info-toggle" onclick="toggleLegend('target-legend')" title="Show/hide region codes guide">
@@ -74,7 +74,7 @@
                     </button>
                 </div>
             </div>
-            <div class="filter-buttons collapsible-filter" id="target-filters">
+            <div class="filter-buttons collapsible-filter collapsed" id="target-filters">
                 <button class="filter-btn active" onclick="filterByTarget(null)">All Regions</button>
                 <!-- Dynamically populated -->
             </div>
@@ -115,7 +115,7 @@
             <div class="filter-header">
                 <h3>🗣️ Filter by Language</h3>
                 <div class="filter-header-buttons">
-                    <button class="collapse-toggle" onclick="toggleFilterSection('language-filters')" title="Collapse/expand filter">
+                    <button class="collapse-toggle collapsed" onclick="toggleFilterSection('language-filters')" title="Collapse/expand filter">
                         <span class="collapse-icon">▼</span>
                     </button>
                     <button class="info-toggle" onclick="toggleLegend('language-legend')" title="Show/hide language information">
@@ -123,7 +123,7 @@
                     </button>
                 </div>
             </div>
-            <div class="filter-buttons collapsible-filter" id="language-filters">
+            <div class="filter-buttons collapsible-filter collapsed" id="language-filters">
                 <button class="filter-btn active" onclick="filterByLanguage(null)">All Languages</button>
                 <!-- Dynamically populated -->
             </div>
