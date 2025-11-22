@@ -1002,6 +1002,24 @@ function toggleLegend(legendId) {
 }
 
 /**
+ * Toggle collapse/expand state of filter section
+ */
+function toggleFilterSection(filterId) {
+    const filterSection = document.getElementById(filterId);
+    const button = event.currentTarget;
+    
+    if (filterSection.classList.contains('collapsed')) {
+        // Expand
+        filterSection.classList.remove('collapsed');
+        button.classList.remove('collapsed');
+    } else {
+        // Collapse
+        filterSection.classList.add('collapsed');
+        button.classList.add('collapsed');
+    }
+}
+
+/**
  * Reload schedules from server
  */
 async function reloadSchedules() {

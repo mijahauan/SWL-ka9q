@@ -223,23 +223,56 @@ body {
     margin: 0;
 }
 
+.filter-header-buttons {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.collapse-toggle,
 .info-toggle {
     background: transparent;
     border: none;
     cursor: pointer;
     padding: 4px 8px;
     border-radius: 4px;
-    transition: background 0.2s;
+    transition: all 0.2s;
     font-size: 16px;
 }
 
+.collapse-toggle:hover,
 .info-toggle:hover {
     background: rgba(30, 60, 114, 0.1);
+}
+
+.collapse-icon {
+    display: inline-block;
+    font-style: normal;
+    transition: transform 0.3s ease;
+}
+
+.collapse-toggle.collapsed .collapse-icon {
+    transform: rotate(-90deg);
 }
 
 .info-icon {
     display: inline-block;
     font-style: normal;
+}
+
+/* Collapsible filter sections */
+.collapsible-filter {
+    max-height: 2000px;
+    overflow: hidden;
+    transition: max-height 0.4s ease, opacity 0.3s ease, margin 0.3s ease;
+    opacity: 1;
+}
+
+.collapsible-filter.collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+    margin-bottom: 0;
 }
 
 /* Filter legend (collapsible reference) */
