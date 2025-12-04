@@ -31,6 +31,10 @@ DEFAULT_RTP_PORT = int(os.environ.get('SWL_RTP_PORT', '5004'))
 DEFAULT_PRESET = 'am'
 DEFAULT_SAMPLE_RATE = 12000
 
+# Local cache of channels we've created, keyed by (rtp_destination, frequency_hz)
+# This prevents duplicate channel creation when discovery is slow
+_channel_cache: Dict[tuple, Dict] = {}
+
 
 def discover_channels(radiod_host: str, interface: Optional[str] = None, 
                      listen_duration: float = 3.0,
@@ -279,18 +283,36 @@ def get_or_create_channel(radiod_host: str, frequency_hz: float,
     Returns:
         Dict with channel information including SSRC, multicast address and port
     """
-    import time
-    
     rtp_destination = rtp_destination or DEFAULT_RTP_DESTINATION
     rtp_port = rtp_port or DEFAULT_RTP_PORT
     preset = preset or DEFAULT_PRESET
     sample_rate = sample_rate or DEFAULT_SAMPLE_RATE
     
-    # Strategy 1: Check if channel already exists at this frequency in our RTP stream
+    # Cache key for this frequency on this RTP destination
+    cache_key = (rtp_destination, int(frequency_hz))
+    
+    # Strategy 1: Check local cache first (fastest)
+    if cache_key in _channel_cache:
+        cached = _channel_cache[cache_key]
+        return {
+            'success': True,
+            'ssrc': cached['ssrc'],
+            'frequency_hz': cached['frequency_hz'],
+            'multicast_address': cached['multicast_address'],
+            'port': cached['port'],
+            'sample_rate': cached['sample_rate'],
+            'preset': cached['preset'],
+            'mode': 'cached',
+            'existed': True
+        }
+    
+    # Strategy 2: Check if channel already exists via discovery
     existing = find_channel_by_frequency(
         radiod_host, frequency_hz, interface, rtp_destination
     )
     if existing:
+        # Add to cache
+        _channel_cache[cache_key] = existing
         return {
             'success': True,
             'ssrc': existing['ssrc'],
@@ -303,10 +325,9 @@ def get_or_create_channel(radiod_host: str, frequency_hz: float,
             'existed': True
         }
     
-    # Strategy 2: Create channel using tune() which waits for radiod confirmation
+    # Strategy 3: Create channel using tune() which waits for radiod confirmation
     with RadiodControl(radiod_host) as control:
         # Generate a random SSRC - radiod will use this
-        # (radiod doesn't auto-assign SSRCs, client must provide one)
         channel_ssrc = secrets.randbits(31)
         
         # Use tune() to create channel and wait for confirmation
@@ -321,8 +342,8 @@ def get_or_create_channel(radiod_host: str, frequency_hz: float,
             timeout=5.0
         )
         
-        # Return confirmed values from radiod
-        return _add_metrics({
+        # Build result and cache it
+        result = {
             'success': True,
             'ssrc': status.get('ssrc', channel_ssrc),
             'frequency_hz': status.get('frequency', frequency_hz),
@@ -333,7 +354,12 @@ def get_or_create_channel(radiod_host: str, frequency_hz: float,
             'mode': 'created',
             'existed': False,
             'confirmed': True
-        }, control, include_metrics)
+        }
+        
+        # Cache the new channel
+        _channel_cache[cache_key] = result
+        
+        return _add_metrics(result, control, include_metrics)
 
 
 def remove_channel(radiod_host: str, ssrc: int = None, frequency_hz: float = None,
@@ -380,6 +406,12 @@ def remove_channel(radiod_host: str, ssrc: int = None, frequency_hz: float = Non
     with RadiodControl(radiod_host) as control:
         # remove_channel sets frequency to 0, which marks channel for removal
         control.remove_channel(ssrc=ssrc)
+        
+        # Clear from cache if present
+        if frequency_hz:
+            cache_key = (rtp_destination, int(frequency_hz))
+            _channel_cache.pop(cache_key, None)
+        
         return _add_metrics({
             'success': True,
             'ssrc': ssrc
