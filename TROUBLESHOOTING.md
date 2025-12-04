@@ -65,11 +65,11 @@ python3 -c "from ka9q import RadiodControl; print('✅ ka9q-python OK')"
 
 **If you get an error:**
 ```bash
-# Install ka9q-python from GitHub repository
-pip3 install git+https://github.com/mijahauan/ka9q-python.git
+# Install ka9q-python from PyPI (official release)
+pip3 install "ka9q>=2.2,<3"
 
 # Or with user install (if you don't have system pip permissions)
-pip3 install --user git+https://github.com/mijahauan/ka9q-python.git
+pip3 install --user "ka9q>=2.2,<3"
 ```
 
 ### Step 3: Check ka9q-radio (radiod) Status
@@ -175,9 +175,9 @@ Look at the Node.js server console output when you try to play audio:
 
 **Solution:**
 ```bash
-pip3 install git+https://github.com/mijahauan/ka9q-python.git
+pip3 install "ka9q>=2.2,<3"
 # or (if you don't have system pip permissions)
-pip3 install --user git+https://github.com/mijahauan/ka9q-python.git
+pip3 install --user "ka9q>=2.2,<3"
 ```
 
 ### Issue: "Connection refused" or "Name or service not known"

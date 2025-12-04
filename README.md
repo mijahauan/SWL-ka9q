@@ -81,10 +81,10 @@ A web-based interface for monitoring shortwave broadcast stations with live audi
 
 - **Node.js** >= 16.0.0
 - **ka9q-radio** (radiod running and accessible)
-- **Python 3** with **ka9q-python** package (custom package, not on PyPI):
+- **Python 3** with **ka9q-python** package from PyPI:
   ```bash
   # Installed automatically by setup-venv.sh, or manually:
-  pip3 install git+https://github.com/mijahauan/ka9q-python.git
+  pip3 install "ka9q>=2.2,<3"
   ```
 
 ### Optional but Recommended
@@ -142,11 +142,11 @@ npm run setup && npm start
    cd SWL-ka9q
    ```
 
-2. **Set up Python virtual environment and install ka9q-python:**
+2. **Set up Python virtual environment and install ka9q-python from PyPI:**
    ```bash
    ./setup-venv.sh
    ```
-   This creates a `venv/` directory and installs the **custom ka9q-python package from GitHub** (not available on PyPI).
+   This creates a `venv/` directory and installs the **ka9q-python package from PyPI** (now officially published).
    
    **Debian/Ubuntu users:** You may need to install `python3-venv` first:
    ```bash

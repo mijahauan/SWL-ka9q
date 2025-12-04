@@ -76,7 +76,7 @@ npm run setup
 
 This single command will:
 - Create a Python virtual environment
-- Install ka9q-python package from GitHub
+- Install ka9q-python package from PyPI
 - Install Node.js dependencies
 
 **If you get an error about `python3-venv`**, run:
@@ -172,8 +172,8 @@ brew install node
 If `npm run setup` doesn't work, you can run steps manually:
 
 ```bash
-# 1. Set up Python environment
-./setup-venv.sh
+# 1. Set up Python environment (installs ka9q from PyPI)
+KA9Q_VERSION="ka9q>=2.2,<3" ./setup-venv.sh
 
 # 2. Install Node.js dependencies
 npm install

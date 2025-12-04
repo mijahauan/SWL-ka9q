@@ -5,14 +5,14 @@
 Before configuring, make sure you've installed the dependencies:
 
 ```bash
-# 1. Install ka9q-python (custom package from GitHub)
+# 1. Install ka9q-python (official package from PyPI)
 ./setup-venv.sh
 
 # 2. Install Node.js dependencies
 npm install
 ```
 
-The `setup-venv.sh` script creates a Python virtual environment and installs the **ka9q-python** package from GitHub (not available on PyPI).
+The `setup-venv.sh` script creates a Python virtual environment and installs the **ka9q-python** package from PyPI (now officially published).
 
 ## Quick Start with Interactive Setup
 
@@ -186,6 +186,29 @@ echo 'export RADIOD_AUDIO_MULTICAST=239.113.49.249' >> ~/.bashrc
 
 ## Advanced Configuration (Optional)
 
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RADIOD_HOSTNAME` | `localhost` | Radiod hostname or IP address |
+| `KA9Q_MULTICAST_INTERFACE` | (auto) | Network interface IP for multicast |
+| `SWL_RTP_DESTINATION` | `239.1.2.100` | RTP destination IP for all SWL channels |
+| `SWL_RTP_PORT` | `5004` | RTP destination port |
+| `KA9Q_INCLUDE_METRICS` | `true` | Include ka9q-python metrics in logs |
+
+### Channel Request Paradigm (ka9q-python 2.2+)
+
+SWL-ka9q uses a new channel request paradigm:
+- **No SSRC in requests** - radiod assigns the SSRC automatically
+- **Single RTP destination** - all SWL channels stream to `SWL_RTP_DESTINATION`
+- **Search by frequency** - existing channels are found by frequency, not SSRC
+- **Default preset: `am`** - optimized for shortwave broadcast listening
+- **Default sample rate: `12000`** - sufficient for AM broadcast audio
+
+This simplifies channel management and allows radiod to optimize SSRC allocation.
+
+### Customizing server.js
+
 If you need to customize other settings, edit `server.js`:
 
 ```javascript
@@ -206,7 +229,7 @@ The ka9q-python package is not installed. Run:
 ./setup-venv.sh
 ```
 
-This installs the custom **ka9q-python** package from GitHub (it's not available on PyPI).
+This installs the **ka9q-python** package from PyPI (official release).
 
 ### Verify ka9q-python Installation
 
@@ -228,8 +251,8 @@ If `setup-venv.sh` fails, install manually:
 python3 -m venv venv
 source venv/bin/activate
 
-# Install ka9q-python from GitHub
-pip3 install git+https://github.com/mijahauan/ka9q-python.git
+# Install ka9q-python from PyPI
+pip3 install "ka9q>=2.2,<3"
 
 # Verify
 python3 -c "from ka9q import RadiodControl; print('✅ Installed')"

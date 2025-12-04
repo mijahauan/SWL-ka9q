@@ -54,16 +54,21 @@ echo ""
 echo -e "${BLUE}📦 Upgrading pip...${NC}"
 ./venv/bin/pip3 install --upgrade pip --quiet
 
-# Install ka9q-python
+# Install ka9q-python from PyPI
 echo ""
-echo -e "${BLUE}📥 Installing ka9q-python from GitHub...${NC}"
-if ! ./venv/bin/pip3 install git+https://github.com/mijahauan/ka9q-python.git; then
-    echo -e "${RED}❌ Failed to install ka9q-python${NC}"
+DEFAULT_KA9Q_VERSION='ka9q>=2.2,<3.0'
+KA9Q_VERSION="${KA9Q_VERSION:-$DEFAULT_KA9Q_VERSION}"
+echo -e "${BLUE}📥 Installing ka9q-python from PyPI (${KA9Q_VERSION})...${NC}"
+if ! ./venv/bin/pip3 install --upgrade "${KA9Q_VERSION}"; then
+    echo -e "${RED}❌ Failed to install ka9q-python from PyPI${NC}"
     echo ""
     echo "Common issues:"
     echo "  - No internet connection"
-    echo "  - Git not installed (run: sudo apt install git)"
-    echo "  - GitHub unavailable"
+    echo "  - PyPI unavailable (try again shortly)"
+    echo "  - Corporate proxy blocking https://pypi.org (configure pip accordingly)"
+    echo ""
+    echo "You can override the version constraint with:"
+    echo "  KA9Q_VERSION=\"ka9q==2.2.0\" ./setup-venv.sh"
     exit 1
 fi
 

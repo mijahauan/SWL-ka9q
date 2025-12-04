@@ -35,7 +35,12 @@ const KA9Q_STATUS_PORT = 5006;
 const KA9Q_AUDIO_PORT = 5004;
 const RADIOD_HOSTNAME = process.env.RADIOD_HOSTNAME || 'localhost';
 const MULTICAST_INTERFACE = process.env.KA9Q_MULTICAST_INTERFACE || null;
-const RADIOD_AUDIO_MULTICAST = process.env.RADIOD_AUDIO_MULTICAST || null;
+const INCLUDE_KA9Q_METRICS = process.env.KA9Q_INCLUDE_METRICS === 'false' ? false : true;
+
+// New channel paradigm: all SWL-ka9q channels go to a single RTP destination
+// radiod assigns SSRCs; we search by frequency to find existing channels
+const SWL_RTP_DESTINATION = process.env.SWL_RTP_DESTINATION || '239.1.2.100';
+const SWL_RTP_PORT = parseInt(process.env.SWL_RTP_PORT || '5004');
 
 // Python configuration - use venv if available, otherwise system python3
 const VENV_PYTHON = path.join(__dirname, 'venv', 'bin', 'python3');
@@ -378,17 +383,19 @@ class Ka9qRadioProxy extends EventEmitter {
   }
 
   async startAudioStream(frequency) {
-    const ssrc = Math.floor(frequency); // Frequency is already in Hz, use as SSRC
     const freqKHz = frequency / 1000;
     
     console.log(`🎵 Starting stream: ${freqKHz} kHz`);
     
-    // Use the radiod_client.py abstraction layer
+    // New paradigm: no SSRC in request, radiod assigns it
+    // We provide RTP destination and search by frequency
     const interfaceArg = MULTICAST_INTERFACE ? `--interface ${MULTICAST_INTERFACE}` : '';
-    const fallbackArg = RADIOD_AUDIO_MULTICAST ? `--fallback-multicast ${RADIOD_AUDIO_MULTICAST}` : '';
+    const rtpDestArg = `--rtp-destination ${SWL_RTP_DESTINATION}`;
+    const rtpPortArg = `--rtp-port ${SWL_RTP_PORT}`;
+    const metricsArg = INCLUDE_KA9Q_METRICS ? '--include-metrics' : '';
     const scriptPath = path.join(__dirname, 'radiod_client.py');
     // Use -u for unbuffered Python output
-    const cmd = `${PYTHON_CMD} -u ${scriptPath} --radiod-host ${RADIOD_HOSTNAME} ${interfaceArg} ${fallbackArg} get-or-create --ssrc ${ssrc} --frequency ${frequency} --preset am --sample-rate 12000 --gain 30.0`;
+    const cmd = `${PYTHON_CMD} -u ${scriptPath} --radiod-host ${RADIOD_HOSTNAME} ${interfaceArg} ${rtpDestArg} ${rtpPortArg} ${metricsArg} get-or-create --frequency ${frequency} --preset am --sample-rate 12000 --gain 30.0`;
     
     try {
       const { stdout, stderr } = await execAsync(cmd, { timeout: 30000 });
@@ -406,11 +413,21 @@ class Ka9qRadioProxy extends EventEmitter {
       }
       
       const existed = result.existed ? '(reused existing)' : '(created new)';
-      console.log(`✅ Channel ready: SSRC ${result.ssrc} ${existed}`);
+      const ssrcInfo = result.ssrc ? `SSRC ${result.ssrc}` : 'SSRC pending';
+      console.log(`✅ Channel ready: ${ssrcInfo} at ${freqKHz} kHz ${existed}`);
+      
+      if (result.metrics) {
+        console.log(
+          `📈 ka9q metrics: commands=${result.metrics.commands_sent}, failed=${result.metrics.commands_failed}, status=${result.metrics.status_received}`
+        );
+      }
       
       if (Math.abs(result.frequency_hz - frequency) > 1) {
         console.warn(`⚠️ Frequency mismatch! Requested ${frequency} Hz but got ${result.frequency_hz} Hz`);
       }
+      
+      // Use radiod-assigned SSRC, or frequency as fallback key
+      const streamKey = result.ssrc || Math.floor(frequency);
       
       const stream = {
         ssrc: result.ssrc,
@@ -421,7 +438,7 @@ class Ka9qRadioProxy extends EventEmitter {
         sampleRate: result.sample_rate
       };
       
-      this.activeStreams.set(ssrc, stream);
+      this.activeStreams.set(streamKey, stream);
       
       // Join the audio multicast group NOW that we have the address
       if (result.multicast_address) {
@@ -447,42 +464,47 @@ class Ka9qRadioProxy extends EventEmitter {
     }
   }
   
-  async stopAudioStream(ssrc) {
-    const stream = this.activeStreams.get(ssrc);
+  async stopAudioStream(streamKey) {
+    // streamKey can be SSRC or frequency (used as fallback key)
+    const stream = this.activeStreams.get(streamKey);
     if (stream) {
       stream.active = false;
-      this.activeStreams.delete(ssrc);
+      this.activeStreams.delete(streamKey);
+
+      const interfaceArg = MULTICAST_INTERFACE ? `--interface ${MULTICAST_INTERFACE}` : '';
+      const rtpDestArg = `--rtp-destination ${SWL_RTP_DESTINATION}`;
+      const metricsArg = INCLUDE_KA9Q_METRICS ? '--include-metrics' : '';
+      const scriptPath = path.join(__dirname, 'radiod_client.py');
       
-      // Delete channel from radiod by setting frequency to 0 Hz
-      // Note: We bypass the library's set_frequency validation which rejects 0 Hz,
-      // but radiod itself accepts 0 Hz as a deletion signal
+      // Delete channel - can use SSRC if known, or frequency to look it up
       try {
-        const pythonScript = `import sys
-import json
-import random
-from ka9q import RadiodControl
-from ka9q.control import encode_double, encode_int, encode_eol
-from ka9q.types import StatusType, CMD
-
-control = RadiodControl('${RADIOD_HOSTNAME}')
-
-# Manually construct TLV command to set frequency to 0 (bypasses validation)
-cmdbuffer = bytearray()
-cmdbuffer.append(CMD)
-encode_double(cmdbuffer, StatusType.RADIO_FREQUENCY, 0.0)
-encode_int(cmdbuffer, StatusType.OUTPUT_SSRC, ${ssrc})
-encode_int(cmdbuffer, StatusType.COMMAND_TAG, random.randint(1, 2**31))
-encode_eol(cmdbuffer)
-
-# Send command to radiod
-control.send_command(cmdbuffer)
-print(json.dumps({'success': True, 'ssrc': ${ssrc}}))`;
+        let removeArg;
+        if (stream.ssrc) {
+          removeArg = `--ssrc ${stream.ssrc}`;
+        } else if (stream.frequency) {
+          removeArg = `--frequency ${stream.frequency}`;
+        } else {
+          console.warn(`⚠️ Cannot remove channel: no SSRC or frequency known`);
+          return;
+        }
         
-        // Async execution using stdin
-        await execAsync(`echo "${pythonScript.replace(/"/g, '\\"')}" | ${PYTHON_CMD}`, { timeout: 5000 });
-        console.log(`✅ Channel ${ssrc} deleted`);
+        const cmd = `${PYTHON_CMD} -u ${scriptPath} --radiod-host ${RADIOD_HOSTNAME} ${interfaceArg} ${rtpDestArg} ${metricsArg} remove ${removeArg}`;
+        const { stdout, stderr } = await execAsync(cmd, { timeout: 5000 });
+        if (stderr && stderr.trim()) {
+          console.error(`⚠️ Python stderr while deleting channel:`, stderr.trim());
+        }
+        const result = JSON.parse(stdout.trim());
+        if (!result.success) {
+          throw new Error(result.error || 'Unknown error from Python client');
+        }
+        if (result.metrics) {
+          console.log(
+            `📈 ka9q metrics (delete): commands=${result.metrics.commands_sent}, failed=${result.metrics.commands_failed}, status=${result.metrics.status_received}`
+          );
+        }
+        console.log(`✅ Channel removed (SSRC ${result.ssrc})`);
       } catch (err) {
-        console.error(`❌ Error deleting channel ${ssrc}:`, err.message);
+        console.error(`❌ Error deleting channel:`, err.message);
       }
     }
   }
