@@ -73,6 +73,10 @@ class Ka9qRadioProxy extends EventEmitter {
     this.bonjour = null;
     this.browser = null;
     
+    // Channel cache: Map of frequency -> channel info
+    // Prevents duplicate channel creation when Python discovery is slow
+    this.channelCache = new Map();
+    
     this.init();
   }
 
@@ -384,8 +388,20 @@ class Ka9qRadioProxy extends EventEmitter {
 
   async startAudioStream(frequency) {
     const freqKHz = frequency / 1000;
+    const freqInt = Math.floor(frequency);
     
     console.log(`🎵 Starting stream: ${freqKHz} kHz`);
+    
+    // Check cache first - prevents duplicate channel creation
+    if (this.channelCache.has(freqInt)) {
+      const cached = this.channelCache.get(freqInt);
+      console.log(`✅ Channel ready: SSRC ${cached.ssrc} at ${freqKHz} kHz (cached)`);
+      
+      // Ensure we're in the activeStreams map
+      this.activeStreams.set(cached.ssrc, cached);
+      
+      return cached;
+    }
     
     // New paradigm: no SSRC in request, radiod assigns it
     // We provide RTP destination and search by frequency
@@ -440,6 +456,9 @@ class Ka9qRadioProxy extends EventEmitter {
       
       this.activeStreams.set(streamKey, stream);
       
+      // Cache by frequency to prevent duplicate creation
+      this.channelCache.set(freqInt, stream);
+      
       // Join the audio multicast group NOW that we have the address
       if (result.multicast_address) {
         if (!this.joinedMulticastGroups.has(result.multicast_address)) {
@@ -470,6 +489,11 @@ class Ka9qRadioProxy extends EventEmitter {
     if (stream) {
       stream.active = false;
       this.activeStreams.delete(streamKey);
+      
+      // Clear from frequency cache
+      if (stream.frequency) {
+        this.channelCache.delete(Math.floor(stream.frequency));
+      }
 
       const interfaceArg = MULTICAST_INTERFACE ? `--interface ${MULTICAST_INTERFACE}` : '';
       const rtpDestArg = `--rtp-destination ${SWL_RTP_DESTINATION}`;
