@@ -300,6 +300,7 @@ def get_or_create_channel(radiod_host: str, frequency_hz: float,
         }
     
     # Strategy 2: Request a new channel (radiod assigns SSRC)
+    fallback_ssrc = None
     with RadiodControl(radiod_host) as control:
         try:
             # Try new API: request_channel with destination, no SSRC
@@ -345,7 +346,21 @@ def get_or_create_channel(radiod_host: str, frequency_hz: float,
                 'existed': False
             }, control, include_metrics)
         
-        # Channel created but not yet discoverable - return with RTP destination
+        # Discovery failed - if we used fallback, we know the SSRC
+        if fallback_ssrc is not None:
+            return _add_metrics({
+                'success': True,
+                'ssrc': fallback_ssrc,  # We know the SSRC because we set it
+                'frequency_hz': frequency_hz,
+                'multicast_address': rtp_destination,
+                'port': rtp_port,
+                'sample_rate': sample_rate,
+                'preset': preset,
+                'mode': 'created_fallback',
+                'existed': False
+            }, control, include_metrics)
+        
+        # Channel requested but SSRC unknown (new API, discovery failed)
         return _add_metrics({
             'success': True,
             'ssrc': None,  # Will be assigned by radiod

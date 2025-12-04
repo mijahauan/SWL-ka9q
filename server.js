@@ -1153,11 +1153,15 @@ app.get('/api/audio/stream/:frequency', async (req, res) => {
   try {
     const stream = await radioProxy.startAudioStream(frequency);
     
+    // Use SSRC if available, otherwise use frequency as the stream identifier
+    const streamId = stream.ssrc || Math.floor(frequency);
+    
     res.json({
       success: true,
       ssrc: stream.ssrc,
+      streamId: streamId,  // Always valid identifier for WebSocket
       frequency: stream.frequency,
-      websocket: `ws://${req.headers.host}/api/audio/ws/${stream.ssrc}`,
+      websocket: `ws://${req.headers.host}/api/audio/ws/${streamId}`,
       multicast: `${stream.multicastAddress}:${stream.multicastPort}`
     });
   } catch (error) {
@@ -1325,15 +1329,16 @@ async function startServer() {
     const url = new URL(request.url, `http://${request.headers.host}`);
     
     if (url.pathname.startsWith('/api/audio/ws/')) {
-      const ssrc = parseInt(url.pathname.split('/')[4]);
-      if (!isNaN(ssrc)) {
-        console.log(`🔄 WebSocket upgrade request for SSRC ${ssrc}`);
+      // streamId can be SSRC (assigned by radiod) or frequency (fallback)
+      const streamId = parseInt(url.pathname.split('/')[4]);
+      if (!isNaN(streamId) && streamId > 0) {
+        console.log(`🔄 WebSocket upgrade request for stream ${streamId}`);
         wss.handleUpgrade(request, socket, head, (ws) => {
-          console.log(`✅ WebSocket upgrade successful for SSRC ${ssrc}`);
-          wss.emit('connection', ws, request, ssrc);
+          console.log(`✅ WebSocket upgrade successful for stream ${streamId}`);
+          wss.emit('connection', ws, request, streamId);
         });
       } else {
-        console.warn(`❌ Invalid SSRC in WebSocket path: ${url.pathname}`);
+        console.warn(`❌ Invalid stream ID in WebSocket path: ${url.pathname}`);
         socket.destroy();
       }
     } else {
