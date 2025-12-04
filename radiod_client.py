@@ -299,64 +299,31 @@ def get_or_create_channel(radiod_host: str, frequency_hz: float,
             'existed': True
         }
     
-    # Strategy 2: Create channel using tune() which waits for confirmation
+    # Strategy 2: Create channel - let radiod allocate SSRC
     with RadiodControl(radiod_host) as control:
-        # Use tune() to create/configure channel and get confirmation from radiod
-        # tune() sends command and waits for status response
-        try:
-            # Use frequency as SSRC for now (radiod will use this)
-            channel_ssrc = int(frequency_hz)
-            
-            status = control.tune(
-                ssrc=channel_ssrc,
-                frequency_hz=frequency_hz,
-                preset=preset,
-                sample_rate=sample_rate,
-                gain=gain if not agc_enable else None,
-                agc_enable=agc_enable,
-                destination=f"{rtp_destination}:{rtp_port}",
-                timeout=5.0
-            )
-            
-            # tune() returns confirmed status from radiod
-            return _add_metrics({
-                'success': True,
-                'ssrc': status.get('ssrc', channel_ssrc),
-                'frequency_hz': status.get('frequency', frequency_hz),
-                'multicast_address': status.get('destination', rtp_destination),
-                'port': rtp_port,
-                'sample_rate': status.get('sample_rate', sample_rate),
-                'preset': status.get('preset', preset),
-                'mode': 'tuned',
-                'existed': False,
-                'confirmed': True
-            }, control, include_metrics)
-            
-        except Exception as e:
-            # tune() failed - fall back to create_channel (fire-and-forget)
-            channel_ssrc = int(frequency_hz)
-            control.create_channel(
-                ssrc=channel_ssrc,
-                frequency_hz=frequency_hz,
-                preset=preset,
-                sample_rate=sample_rate,
-                agc_enable=1 if agc_enable else 0,
-                gain=gain
-            )
-            
-            return _add_metrics({
-                'success': True,
-                'ssrc': channel_ssrc,
-                'frequency_hz': frequency_hz,
-                'multicast_address': rtp_destination,
-                'port': rtp_port,
-                'sample_rate': sample_rate,
-                'preset': preset,
-                'mode': 'created_unconfirmed',
-                'existed': False,
-                'confirmed': False,
-                'note': f'tune() failed ({e}), used create_channel fallback'
-            }, control, include_metrics)
+        # Use create_channel with ssrc=None to let radiod auto-allocate SSRC
+        # Returns the allocated SSRC
+        allocated_ssrc = control.create_channel(
+            frequency_hz=frequency_hz,
+            preset=preset,
+            sample_rate=sample_rate,
+            agc_enable=1 if agc_enable else 0,
+            gain=gain,
+            destination=f"{rtp_destination}:{rtp_port}",
+            ssrc=None  # Let radiod allocate SSRC
+        )
+        
+        return _add_metrics({
+            'success': True,
+            'ssrc': allocated_ssrc,
+            'frequency_hz': frequency_hz,
+            'multicast_address': rtp_destination,
+            'port': rtp_port,
+            'sample_rate': sample_rate,
+            'preset': preset,
+            'mode': 'created',
+            'existed': False
+        }, control, include_metrics)
 
 
 def remove_channel(radiod_host: str, ssrc: int = None, frequency_hz: float = None,
@@ -401,28 +368,12 @@ def remove_channel(radiod_host: str, ssrc: int = None, frequency_hz: float = Non
         }
     
     with RadiodControl(radiod_host) as control:
-        # Use tune() with frequency=0 to remove channel and get confirmation
-        try:
-            status = control.tune(
-                ssrc=ssrc,
-                frequency_hz=0.0,  # Setting frequency to 0 removes the channel
-                timeout=5.0
-            )
-            return _add_metrics({
-                'success': True,
-                'ssrc': ssrc,
-                'confirmed': True,
-                'status': status
-            }, control, include_metrics)
-        except Exception as e:
-            # Fall back to fire-and-forget remove_channel
-            control.remove_channel(ssrc=ssrc)
-            return _add_metrics({
-                'success': True,
-                'ssrc': ssrc,
-                'confirmed': False,
-                'note': f'tune() failed ({e}), used remove_channel fallback'
-            }, control, include_metrics)
+        # remove_channel sets frequency to 0, which marks channel for removal
+        control.remove_channel(ssrc=ssrc)
+        return _add_metrics({
+            'success': True,
+            'ssrc': ssrc
+        }, control, include_metrics)
 
 
 def main():
