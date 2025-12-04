@@ -41,6 +41,19 @@ do_start() {
     
     cd "$SCRIPT_DIR"
     
+    # Load saved radiod hostname if available
+    CONFIG_FILE="$SCRIPT_DIR/.radiod-hostname"
+    if [ -f "$CONFIG_FILE" ]; then
+        export RADIOD_HOSTNAME=$(cat "$CONFIG_FILE")
+        echo -e "   Radiod: $RADIOD_HOSTNAME"
+    fi
+    
+    # Load saved multicast if available
+    MULTICAST_FILE="$SCRIPT_DIR/.radiod-multicast"
+    if [ -f "$MULTICAST_FILE" ]; then
+        export RADIOD_AUDIO_MULTICAST=$(cat "$MULTICAST_FILE")
+    fi
+    
     # Start server in background, redirect output to log
     nohup node server.js >> "$LOG_FILE" 2>&1 &
     local pid=$!
