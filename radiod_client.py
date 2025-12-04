@@ -299,80 +299,64 @@ def get_or_create_channel(radiod_host: str, frequency_hz: float,
             'existed': True
         }
     
-    # Strategy 2: Request a new channel (radiod assigns SSRC)
-    fallback_ssrc = None
+    # Strategy 2: Create channel using tune() which waits for confirmation
     with RadiodControl(radiod_host) as control:
+        # Use tune() to create/configure channel and get confirmation from radiod
+        # tune() sends command and waits for status response
         try:
-            # Try new API: request_channel with destination, no SSRC
-            control.request_channel(
+            # Use frequency as SSRC for now (radiod will use this)
+            channel_ssrc = int(frequency_hz)
+            
+            status = control.tune(
+                ssrc=channel_ssrc,
                 frequency_hz=frequency_hz,
+                preset=preset,
+                sample_rate=sample_rate,
+                gain=gain if not agc_enable else None,
+                agc_enable=agc_enable,
                 destination=f"{rtp_destination}:{rtp_port}",
-                preset=preset,
-                sample_rate=sample_rate,
-                agc_enable=1 if agc_enable else 0,
-                gain=gain
+                timeout=5.0
             )
-        except AttributeError:
-            # Fallback: older ka9q-python without request_channel
-            # Use frequency as SSRC (legacy behavior)
-            fallback_ssrc = int(frequency_hz)
+            
+            # tune() returns confirmed status from radiod
+            return _add_metrics({
+                'success': True,
+                'ssrc': status.get('ssrc', channel_ssrc),
+                'frequency_hz': status.get('frequency', frequency_hz),
+                'multicast_address': status.get('destination', rtp_destination),
+                'port': rtp_port,
+                'sample_rate': status.get('sample_rate', sample_rate),
+                'preset': status.get('preset', preset),
+                'mode': 'tuned',
+                'existed': False,
+                'confirmed': True
+            }, control, include_metrics)
+            
+        except Exception as e:
+            # tune() failed - fall back to create_channel (fire-and-forget)
+            channel_ssrc = int(frequency_hz)
             control.create_channel(
-                ssrc=fallback_ssrc,
+                ssrc=channel_ssrc,
                 frequency_hz=frequency_hz,
                 preset=preset,
                 sample_rate=sample_rate,
                 agc_enable=1 if agc_enable else 0,
                 gain=gain
             )
-        
-        # Wait briefly for radiod to create the channel
-        time.sleep(0.3)
-        
-        # Discover the newly created channel to get assigned SSRC
-        created = find_channel_by_frequency(
-            radiod_host, frequency_hz, interface, rtp_destination
-        )
-        
-        if created:
+            
             return _add_metrics({
                 'success': True,
-                'ssrc': created['ssrc'],
-                'frequency_hz': created['frequency_hz'],
-                'multicast_address': created['multicast_address'],
-                'port': created['port'],
-                'sample_rate': created['sample_rate'],
-                'preset': created['preset'],
-                'mode': 'created',
-                'existed': False
-            }, control, include_metrics)
-        
-        # Discovery failed - if we used fallback, we know the SSRC
-        if fallback_ssrc is not None:
-            return _add_metrics({
-                'success': True,
-                'ssrc': fallback_ssrc,  # We know the SSRC because we set it
+                'ssrc': channel_ssrc,
                 'frequency_hz': frequency_hz,
                 'multicast_address': rtp_destination,
                 'port': rtp_port,
                 'sample_rate': sample_rate,
                 'preset': preset,
-                'mode': 'created_fallback',
-                'existed': False
+                'mode': 'created_unconfirmed',
+                'existed': False,
+                'confirmed': False,
+                'note': f'tune() failed ({e}), used create_channel fallback'
             }, control, include_metrics)
-        
-        # Channel requested but SSRC unknown (new API, discovery failed)
-        return _add_metrics({
-            'success': True,
-            'ssrc': None,  # Will be assigned by radiod
-            'frequency_hz': frequency_hz,
-            'multicast_address': rtp_destination,
-            'port': rtp_port,
-            'sample_rate': sample_rate,
-            'preset': preset,
-            'mode': 'requested',
-            'existed': False,
-            'note': 'Channel requested; SSRC pending discovery'
-        }, control, include_metrics)
 
 
 def remove_channel(radiod_host: str, ssrc: int = None, frequency_hz: float = None,
@@ -417,8 +401,28 @@ def remove_channel(radiod_host: str, ssrc: int = None, frequency_hz: float = Non
         }
     
     with RadiodControl(radiod_host) as control:
-        control.remove_channel(ssrc=ssrc)
-        return _add_metrics({'success': True, 'ssrc': ssrc}, control, include_metrics)
+        # Use tune() with frequency=0 to remove channel and get confirmation
+        try:
+            status = control.tune(
+                ssrc=ssrc,
+                frequency_hz=0.0,  # Setting frequency to 0 removes the channel
+                timeout=5.0
+            )
+            return _add_metrics({
+                'success': True,
+                'ssrc': ssrc,
+                'confirmed': True,
+                'status': status
+            }, control, include_metrics)
+        except Exception as e:
+            # Fall back to fire-and-forget remove_channel
+            control.remove_channel(ssrc=ssrc)
+            return _add_metrics({
+                'success': True,
+                'ssrc': ssrc,
+                'confirmed': False,
+                'note': f'tune() failed ({e}), used remove_channel fallback'
+            }, control, include_metrics)
 
 
 def main():
