@@ -106,7 +106,8 @@ def discover_channels(radiod_host: str, interface: Optional[str] = None,
 def find_channel_by_frequency(radiod_host: str, frequency_hz: float,
                               interface: Optional[str] = None,
                               rtp_destination: Optional[str] = None,
-                              tolerance_hz: float = 1.0) -> Optional[Dict]:
+                              tolerance_hz: float = 1.0,
+                              listen_duration: float = 2.0) -> Optional[Dict]:
     """
     Find an existing channel by frequency in the RTP stream.
     
@@ -116,11 +117,12 @@ def find_channel_by_frequency(radiod_host: str, frequency_hz: float,
         interface: Network interface IP for multicast
         rtp_destination: RTP destination to search in (filters results)
         tolerance_hz: Frequency matching tolerance in Hz
+        listen_duration: How long to listen for status packets (default 2.0s)
     
     Returns:
         Channel info dict if found, None otherwise
     """
-    discovered = discover_channels(radiod_host, interface, listen_duration=1.0,
+    discovered = discover_channels(radiod_host, interface, listen_duration=listen_duration,
                                    rtp_destination=rtp_destination)
     
     # First try exact match by frequency
