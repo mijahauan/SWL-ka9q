@@ -5,8 +5,9 @@ Radiod client abstraction layer.
 This module provides a clean interface between applications (like Node.js) and radiod,
 handling all the complexity of channel discovery, creation, and stream information.
 
-New channel request paradigm (ka9q-python 2.2+):
-- Channel requests do NOT include SSRC; radiod assigns it
+Channel management:
+- App generates random SSRC for new channels
+- Uses tune() to create channel and wait for radiod confirmation
 - App provides an RTP destination IP address for all channels
 - Discovery searches the RTP stream by frequency to find existing channels
 - Default preset is 'am', sample rate is 12000
@@ -16,6 +17,7 @@ import sys
 import json
 import os
 import argparse
+import secrets
 from typing import Dict, List, Optional
 from ka9q import RadiodControl
 from ka9q.discovery import discover_channels_native
@@ -299,30 +301,36 @@ def get_or_create_channel(radiod_host: str, frequency_hz: float,
             'existed': True
         }
     
-    # Strategy 2: Create channel - let radiod allocate SSRC
+    # Strategy 2: Create channel using tune() which waits for radiod confirmation
     with RadiodControl(radiod_host) as control:
-        # Use create_channel with ssrc=None to let radiod auto-allocate SSRC
-        # Returns the allocated SSRC
-        allocated_ssrc = control.create_channel(
+        # Generate a random SSRC - radiod will use this
+        # (radiod doesn't auto-assign SSRCs, client must provide one)
+        channel_ssrc = secrets.randbits(31)
+        
+        # Use tune() to create channel and wait for confirmation
+        status = control.tune(
+            ssrc=channel_ssrc,
             frequency_hz=frequency_hz,
             preset=preset,
             sample_rate=sample_rate,
-            agc_enable=1 if agc_enable else 0,
-            gain=gain,
+            gain=gain if not agc_enable else None,
+            agc_enable=agc_enable,
             destination=f"{rtp_destination}:{rtp_port}",
-            ssrc=None  # Let radiod allocate SSRC
+            timeout=5.0
         )
         
+        # Return confirmed values from radiod
         return _add_metrics({
             'success': True,
-            'ssrc': allocated_ssrc,
-            'frequency_hz': frequency_hz,
+            'ssrc': status.get('ssrc', channel_ssrc),
+            'frequency_hz': status.get('frequency', frequency_hz),
             'multicast_address': rtp_destination,
             'port': rtp_port,
-            'sample_rate': sample_rate,
-            'preset': preset,
+            'sample_rate': status.get('sample_rate', sample_rate),
+            'preset': status.get('preset', preset),
             'mode': 'created',
-            'existed': False
+            'existed': False,
+            'confirmed': True
         }, control, include_metrics)
 
 
