@@ -321,7 +321,7 @@ def get_or_create_channel(radiod_host: str, frequency_hz: float,
     import time
     start_time = time.time()
     poll_interval = 0.2
-    max_duration = 5.0 # reduced from 15.0 since we expect immediate appearance if successful
+    max_duration = 20.0 # reduced from 15.0 since we expect immediate appearance if successful
     
     while time.time() - start_time < max_duration:
         # Short sleep to let radiod process request

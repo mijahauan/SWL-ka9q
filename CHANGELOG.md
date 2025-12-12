@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - 2025-12-11
 - **Fixed:** Critical bug in `radiod_client.py` interfering with audio stream creation (replaced `request_channel` with `create_channel` and added robust timeout handling).
 - **Fixed:** Resolved a JavaScript error (`ReferenceError`) when switching radiod instances in the web interface.
+- **Fixed:** Increased audio channel discovery timeout to 20s to reliably detect new channels even with network latency or packet loss.
 ### Fixed - Audio Stream Reliability
 
 **Critical Fix**: Resolved 500 Internal Server Errors during audio stream creation.
