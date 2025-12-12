@@ -210,42 +210,6 @@ def request_channel(radiod_host: str, frequency_hz: float,
         }, control, include_metrics)
 
 
-def create_channel(radiod_host: str, ssrc: int, frequency_hz: float,
-                  preset: str = None, sample_rate: int = None,
-                  agc_enable: bool = False, gain: float = 30.0,
-                  include_metrics: bool = False) -> Dict:
-    """
-    Create a channel on radiod (legacy API with explicit SSRC).
-    
-    DEPRECATED: Use request_channel() or get_or_create_channel() instead.
-    This is kept for backward compatibility.
-    
-    Args:
-        radiod_host: Radiod hostname
-        ssrc: Channel SSRC identifier
-        frequency_hz: Frequency in Hz
-        preset: Demodulation preset ('am', 'usb', 'lsb', etc.)
-        sample_rate: Audio sample rate
-        agc_enable: Enable automatic gain control
-        gain: Manual gain in dB
-    
-    Returns:
-        Dict with success status
-    """
-    preset = preset or DEFAULT_PRESET
-    sample_rate = sample_rate or DEFAULT_SAMPLE_RATE
-    
-    with RadiodControl(radiod_host) as control:
-        control.create_channel(
-            ssrc=ssrc,
-            frequency_hz=frequency_hz,
-            preset=preset,
-            sample_rate=sample_rate,
-            agc_enable=1 if agc_enable else 0,
-            gain=gain
-        )
-        
-        return _add_metrics({'success': True, 'ssrc': ssrc}, control, include_metrics)
 
 
 def get_or_create_channel(radiod_host: str, frequency_hz: float,
@@ -330,42 +294,20 @@ def get_or_create_channel(radiod_host: str, frequency_hz: float,
     
     # 1. Request the channel
     try:
-        # Check if the installed ka9q package supports request_channel
-        # If not, fall back to legacy behavior (generate SSRC locally)
         with RadiodControl(radiod_host) as control:
-            try:
-                control.request_channel(
-                    frequency_hz=frequency_hz,
-                    destination=f"{rtp_destination}:{rtp_port}",
-                    preset=preset,
-                    sample_rate=sample_rate,
-                    agc_enable=1 if agc_enable else 0,
-                    gain=gain
-                )
-                request_result = _add_metrics({
-                    'success': True, 
-                    'note': 'Requested from radiod (SSRC pending)'
-                }, control, include_metrics)
-            except AttributeError:
-                # Fallback: Generate random SSRC and use tune()
-                # This supports older ka9q-python versions where request_channel is missing
-                channel_ssrc = secrets.randbits(31)
-                control.tune(
-                    ssrc=channel_ssrc,
-                    frequency_hz=frequency_hz,
-                    preset=preset,
-                    sample_rate=sample_rate,
-                    gain=gain if not agc_enable else None,
-                    agc_enable=agc_enable,
-                    destination=f"{rtp_destination}:{rtp_port}",
-                    timeout=5.0
-                )
-                request_result = _add_metrics({
-                    'success': True,
-                    'ssrc': channel_ssrc, # We know it because we generated it
-                    'mode': 'created_legacy'
-                }, control, include_metrics)
-        
+            control.request_channel(
+                frequency_hz=frequency_hz,
+                destination=f"{rtp_destination}:{rtp_port}",
+                preset=preset,
+                sample_rate=sample_rate,
+                agc_enable=1 if agc_enable else 0,
+                gain=gain
+            )
+            request_result = _add_metrics({
+                'success': True, 
+                'note': 'Requested from radiod (SSRC pending)'
+            }, control, include_metrics)
+
         if not request_result.get('success'):
             return request_result
             
@@ -507,13 +449,6 @@ def main():
     remove_parser.add_argument('--ssrc', type=int, help='Channel SSRC to remove')
     remove_parser.add_argument('--frequency', type=float, help='Frequency to find and remove')
     
-    # Legacy create command (deprecated, kept for compatibility)
-    create_parser = subparsers.add_parser('create', help='[DEPRECATED] Create channel with explicit SSRC')
-    create_parser.add_argument('--ssrc', type=int, required=True)
-    create_parser.add_argument('--frequency', type=float, required=True, help='Frequency in Hz')
-    create_parser.add_argument('--preset', default=DEFAULT_PRESET)
-    create_parser.add_argument('--sample-rate', type=int, default=DEFAULT_SAMPLE_RATE)
-    create_parser.add_argument('--gain', type=float, default=30.0)
     
     args = parser.parse_args()
     
@@ -539,11 +474,6 @@ def main():
         elif args.command == 'remove':
             result = remove_channel(args.radiod_host, ssrc=args.ssrc, frequency_hz=args.frequency,
                                     interface=args.interface, rtp_destination=rtp_dest,
-                                    include_metrics=include_metrics)
-        elif args.command == 'create':
-            # Legacy command - deprecated
-            result = create_channel(args.radiod_host, args.ssrc, args.frequency,
-                                    args.preset, args.sample_rate, False, args.gain,
                                     include_metrics=include_metrics)
         
         # Ensure output is valid JSON (handle Infinity/NaN)
