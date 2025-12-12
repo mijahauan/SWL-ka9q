@@ -190,7 +190,9 @@ def request_channel(radiod_host: str, frequency_hz: float,
     with RadiodControl(radiod_host) as control:
         # Request channel with destination but no SSRC
         # radiod will assign an SSRC
-        control.request_channel(
+        # Request channel with destination but no SSRC
+        # radiod will assign an SSRC
+        control.create_channel(
             frequency_hz=frequency_hz,
             destination=f"{rtp_destination}:{rtp_port}",
             preset=preset,
@@ -293,9 +295,10 @@ def get_or_create_channel(radiod_host: str, frequency_hz: float,
     # This ensures we get the correct SSRC assigned by radiod
     
     # 1. Request the channel
+    request_error = None
     try:
         with RadiodControl(radiod_host) as control:
-            control.request_channel(
+            control.create_channel(
                 frequency_hz=frequency_hz,
                 destination=f"{rtp_destination}:{rtp_port}",
                 preset=preset,
@@ -308,21 +311,17 @@ def get_or_create_channel(radiod_host: str, frequency_hz: float,
                 'note': 'Requested from radiod (SSRC pending)'
             }, control, include_metrics)
 
-        if not request_result.get('success'):
-            return request_result
-            
     except Exception as e:
-        return {
-            'success': False,
-            'error': f"Failed to request channel: {str(e)}",
-            'mode': 'failed_request'
-        }
+        # If request failed (e.g. timeout), the channel might still have been created.
+        # We'll save the error and let discovery check if it exists.
+        request_error = str(e)
+        request_result = {'success': False}
     
     # 2. Poll for discovery until it appears (or timeout)
     import time
     start_time = time.time()
     poll_interval = 0.2
-    max_duration = 15.0
+    max_duration = 5.0 # reduced from 15.0 since we expect immediate appearance if successful
     
     while time.time() - start_time < max_duration:
         # Short sleep to let radiod process request
@@ -341,14 +340,20 @@ def get_or_create_channel(radiod_host: str, frequency_hz: float,
             found['confirmed'] = True
             found['existed'] = False
             
+            # If we had a request error but found the channel, log a warning note
+            if request_error:
+                found['note'] = f"Channel found despite request error: {request_error}"
+            
+            found['success'] = True
+            
             # Cache it
             _channel_cache[cache_key] = found
             return found
             
-    # If we get here, we requested successfully but couldn't discover it
+    # If we get here, we requested (or tried to) but couldn't discover it
     return {
         'success': False,
-        'error': 'Channel requested but not discovered (timeout)',
+        'error': f'Channel requested but not discovered. Request error: {request_error}' if request_error else 'Channel requested but not discovered (timeout)',
         'frequency_hz': frequency_hz,
         'mode': 'timeout'
     }
