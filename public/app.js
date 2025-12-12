@@ -154,42 +154,42 @@ class AudioSession {
 
     async start() {
         console.log(`🎵 Starting audio session for ${this.frequency / 1000} kHz (SSRC: ${this.ssrc})`);
-        
+
         // Reset state when starting
         this.intentionallyStopped = false;
         this.audioStarted = false;
         this.audioBuffer = [];
         this.nextPlayTime = 0;
-        
+
         try {
             // Create Web Audio API context
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
                 sampleRate: 12000
             });
             console.log(`🔊 AudioContext created with state: ${this.audioContext.state}`);
-            
+
             // Connect to WebSocket
             this.ws = new WebSocket(this.websocketUrl);
             this.ws.binaryType = 'arraybuffer';
-            
+
             let packetCount = 0;
-            
+
             this.ws.onopen = async () => {
                 console.log(`✅ WebSocket connected for ${this.frequency / 1000} kHz`);
-                
+
                 // Resume AudioContext if suspended (required by browsers)
                 if (this.audioContext.state === 'suspended') {
                     console.log('🔊 Resuming AudioContext...');
                     await this.audioContext.resume();
                     console.log(`🔊 AudioContext state: ${this.audioContext.state}`);
                 }
-                
+
                 // Send start command
                 this.ws.send('A:START');
                 this.isPlaying = true;
                 this.nextPlayTime = this.audioContext.currentTime; // Initialize play time
             };
-            
+
             this.ws.onmessage = (event) => {
                 if (event.data instanceof ArrayBuffer) {
                     packetCount++;
@@ -201,15 +201,15 @@ class AudioSession {
                     console.warn(`⚠️ Received non-ArrayBuffer data:`, typeof event.data, event.data);
                 }
             };
-            
+
             this.ws.onerror = (error) => {
                 console.error(`❌ WebSocket error for ${this.frequency / 1000} kHz:`, error);
             };
-            
+
             this.ws.onclose = () => {
                 console.log(`👋 WebSocket closed for ${this.frequency / 1000} kHz`);
                 this.isPlaying = false;
-                
+
                 // Only attempt reconnection if not intentionally stopped
                 if (!this.intentionallyStopped && this.reconnectAttempts < this.maxReconnectAttempts) {
                     this.reconnectAttempts++;
@@ -219,7 +219,7 @@ class AudioSession {
                     }, 2000 * this.reconnectAttempts);
                 }
             };
-            
+
             return true;
         } catch (error) {
             console.error(`❌ Failed to start audio session:`, error);
@@ -231,24 +231,24 @@ class AudioSession {
         try {
             // Server sends decoded PCM as 16-bit signed integers
             const pcmData = new Int16Array(data);
-            
+
             if (pcmData.length === 0) return;
-            
+
             // Convert to Float32 for Web Audio API
             const audioBuffer = this.audioContext.createBuffer(
                 1, // mono
                 pcmData.length,
                 this.audioContext.sampleRate
             );
-            
+
             const channelData = audioBuffer.getChannelData(0);
             for (let i = 0; i < pcmData.length; i++) {
                 channelData[i] = pcmData[i] / 32768.0; // Convert to -1.0 to 1.0
             }
-            
+
             // Add to buffer for jitter smoothing
             this.audioBuffer.push(audioBuffer);
-            
+
             // Start playback once we have enough buffered
             if (!this.audioStarted && this.audioBuffer.length >= this.minBufferSize) {
                 this.audioStarted = true;
@@ -256,7 +256,7 @@ class AudioSession {
                 this.nextPlayTime = now + 0.1; // Start 100ms in future for initial buffering
                 console.log(`🎵 Starting audio playback with ${this.audioBuffer.length} buffered packets`);
             }
-            
+
             // Schedule buffered audio for playback
             if (this.audioStarted && this.isPlaying) {
                 while (this.audioBuffer.length > 0) {
@@ -264,14 +264,14 @@ class AudioSession {
                     const source = this.audioContext.createBufferSource();
                     source.buffer = buffer;
                     source.connect(this.audioContext.destination);
-                    
+
                     const now = this.audioContext.currentTime;
                     // If we've fallen behind, resync with a small buffer
                     if (this.nextPlayTime < now) {
                         this.nextPlayTime = now + 0.05; // 50ms buffer
                         console.log(`⏩ Audio resync: catching up`);
                     }
-                    
+
                     source.start(this.nextPlayTime);
                     this.nextPlayTime += buffer.duration;
                 }
@@ -283,16 +283,16 @@ class AudioSession {
 
     stop() {
         console.log(`🛑 Stopping audio session for ${this.frequency / 1000} kHz`);
-        
+
         this.isPlaying = false;
         this.intentionallyStopped = true;
-        
+
         if (this.ws) {
             this.ws.send('A:STOP');
             this.ws.close();
             this.ws = null;
         }
-        
+
         if (this.audioContext) {
             this.audioContext.close();
             this.audioContext = null;
@@ -305,20 +305,20 @@ class AudioSession {
  */
 async function init() {
     console.log('🚀 Initializing Broadcast Station Monitor...');
-    
+
     // Update UTC time
     updateUtcTime();
     setInterval(updateUtcTime, 1000);
-    
+
     // Discover available radiod instances
     await discoverRadiod();
-    
+
     // Load stations
     await loadStations();
-    
+
     // Setup event listeners
     document.getElementById('search').addEventListener('input', renderStations);
-    
+
     // Auto-refresh every 60 seconds
     setInterval(loadStations, 60000);
 }
@@ -329,29 +329,29 @@ async function init() {
 async function discoverRadiod() {
     const select = document.getElementById('radiod-select');
     select.innerHTML = '<option value="">Discovering...</option>';
-    
+
     try {
         const response = await fetch('/api/radiod/discover');
         const data = await response.json();
-        
+
         select.innerHTML = '';
-        
+
         if (data.services && data.services.length > 0) {
             data.services.forEach(service => {
                 const option = document.createElement('option');
                 option.value = service.address;
                 option.textContent = service.name;
                 option.title = `Address: ${service.address}`;
-                
+
                 // Select current radiod
-                if (service.address === data.current || 
+                if (service.address === data.current ||
                     service.name.includes(data.current)) {
                     option.selected = true;
                 }
-                
+
                 select.appendChild(option);
             });
-            
+
             // If no match found, add current as custom option
             if (!select.value && data.current) {
                 const option = document.createElement('option');
@@ -368,7 +368,7 @@ async function discoverRadiod() {
             option.selected = true;
             select.appendChild(option);
         }
-        
+
         console.log(`📻 Found ${data.services?.length || 0} radiod instances`);
     } catch (error) {
         console.error('Failed to discover radiod:', error);
@@ -381,31 +381,32 @@ async function discoverRadiod() {
  */
 async function selectRadiod(address) {
     if (!address) return;
-    
+
     const select = document.getElementById('radiod-select');
     const originalValue = select.value;
-    
+
     try {
         console.log(`🔄 Switching to radiod: ${address}`);
-        
+
         const response = await fetch('/api/radiod/select', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ address })
         });
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
             console.log(`✅ ${data.message}`);
-            
+
             // Stop any active audio sessions
             for (const [freq, session] of activeAudioSessions) {
                 if (session.ws) session.ws.close();
             }
             activeAudioSessions.clear();
-            updateListeningCount();
-            
+            updateStats();
+            updateAudioStatus();
+
             // Reload stations (in case different radiod has different coverage)
             await loadStations();
         } else {
@@ -440,15 +441,15 @@ async function loadStations() {
         const timeResponse = await fetch('/api/stations');
         if (!timeResponse.ok) throw new Error('Failed to load stations');
         allStations = await timeResponse.json();
-        
+
         // Load frequency-based view
         const freqResponse = await fetch('/api/stations/by-frequency');
         if (!freqResponse.ok) throw new Error('Failed to load frequency data');
         frequencyData = await freqResponse.json();
-        
+
         console.log(`✅ Loaded ${allStations.length} station schedules`);
         console.log(`✅ Loaded ${frequencyData.length} unique frequencies`);
-        
+
         populateFilters();
         renderStations();
         updateStats();
@@ -465,7 +466,7 @@ function populateFilters() {
     // Extract unique targets
     const targets = new Set();
     const languages = new Set();
-    
+
     allStations.forEach(station => {
         if (station.target && station.target.trim()) {
             targets.add(station.target.trim());
@@ -474,11 +475,11 @@ function populateFilters() {
             languages.add(station.language.trim());
         }
     });
-    
+
     // Sort alphabetically
     const sortedTargets = Array.from(targets).sort();
     const sortedLanguages = Array.from(languages).sort();
-    
+
     // Populate target filters with tooltips
     const targetContainer = document.getElementById('target-filters');
     const targetButtons = sortedTargets.map(target => {
@@ -487,7 +488,7 @@ function populateFilters() {
         return `<button class="filter-btn" onclick="filterByTarget('${target.replace(/'/g, "\\'")}')" title="${tooltip}">${displayText}</button>`;
     }).join('');
     targetContainer.innerHTML = `<button class="filter-btn active" onclick="filterByTarget(null)" title="Show all target regions">All Regions</button>${targetButtons}`;
-    
+
     // Populate language filters with tooltips
     const languageContainer = document.getElementById('language-filters');
     const languageButtons = sortedLanguages.map(language => {
@@ -496,7 +497,7 @@ function populateFilters() {
         return `<button class="filter-btn" onclick="filterByLanguage('${language.replace(/'/g, "\\'")}')" title="${tooltip}">${displayText}</button>`;
     }).join('');
     languageContainer.innerHTML = `<button class="filter-btn active" onclick="filterByLanguage(null)" title="Show all languages">All Languages</button>${languageButtons}`;
-    
+
     console.log(`✅ Populated ${sortedTargets.length} target regions and ${sortedLanguages.length} languages`);
 }
 
@@ -505,11 +506,11 @@ function populateFilters() {
  */
 function switchTab(view) {
     currentView = view;
-    
+
     // Update tab buttons
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     event.target.classList.add('active');
-    
+
     renderStations();
 }
 
@@ -518,15 +519,15 @@ function switchTab(view) {
  */
 function switchDisplay(mode) {
     displayMode = mode;
-    
+
     // Update toggle buttons
     document.querySelectorAll('.toggle-btn').forEach(btn => btn.classList.remove('active'));
     document.getElementById(`toggle-${mode}`).classList.add('active');
-    
+
     // Update container class
     const container = document.getElementById('stations-container');
     container.className = mode === 'table' ? 'stations-table' : 'stations-grid';
-    
+
     renderStations();
 }
 
@@ -547,7 +548,7 @@ function renderStations() {
 function renderTimeView() {
     const container = document.getElementById('stations-container');
     const searchTerm = document.getElementById('search').value.toLowerCase();
-    
+
     // Filter stations (show all, but filter by band, target, language, and search)
     let filteredStations = allStations.filter(station => {
         // Band filter
@@ -558,17 +559,17 @@ function renderTimeView() {
                 return false;
             }
         }
-        
+
         // Target filter
         if (currentTargetFilter && station.target !== currentTargetFilter) {
             return false;
         }
-        
+
         // Language filter
         if (currentLanguageFilter && station.language !== currentLanguageFilter) {
             return false;
         }
-        
+
         // Search filter
         if (searchTerm) {
             const searchableText = [
@@ -578,28 +579,28 @@ function renderTimeView() {
                 station.target,
                 station.location || ''
             ].join(' ').toLowerCase();
-            
+
             if (!searchableText.includes(searchTerm)) return false;
         }
-        
+
         return true;
     });
-    
+
     // Sort by frequency
     filteredStations.sort((a, b) => a.frequency - b.frequency);
-    
+
     if (filteredStations.length === 0) {
         container.innerHTML = '<div class="loading">No stations found matching your criteria.</div>';
         return;
     }
-    
+
     // Render based on display mode
     if (displayMode === 'table') {
         container.innerHTML = createStationsTable(filteredStations);
     } else {
         container.innerHTML = filteredStations.map(station => createStationCard(station)).join('');
     }
-    
+
     updateStats();
 }
 
@@ -609,24 +610,24 @@ function renderTimeView() {
 function renderFrequencyView() {
     const container = document.getElementById('stations-container');
     const searchTerm = document.getElementById('search').value.toLowerCase();
-    
+
     // Filter frequencies and their schedules
     let filteredFreqs = frequencyData.map(freq => {
         // Clone the frequency object
         const filteredFreq = { ...freq };
-        
+
         // Filter schedules within this frequency
         filteredFreq.schedules = freq.schedules.filter(schedule => {
             // Target filter
             if (currentTargetFilter && schedule.target !== currentTargetFilter) {
                 return false;
             }
-            
+
             // Language filter
             if (currentLanguageFilter && schedule.language !== currentLanguageFilter) {
                 return false;
             }
-            
+
             // Search filter
             if (searchTerm) {
                 const searchableText = [
@@ -635,13 +636,13 @@ function renderFrequencyView() {
                     schedule.target,
                     schedule.location || ''
                 ].join(' ').toLowerCase();
-                
+
                 if (!searchableText.includes(searchTerm)) return false;
             }
-            
+
             return true;
         });
-        
+
         return filteredFreq;
     }).filter(freq => {
         // Band filter
@@ -652,26 +653,26 @@ function renderFrequencyView() {
                 return false;
             }
         }
-        
+
         // Only include frequencies that have at least one schedule after filtering
         return freq.schedules.length > 0;
     });
-    
+
     // Sort by frequency
     filteredFreqs.sort((a, b) => a.frequency - b.frequency);
-    
+
     if (filteredFreqs.length === 0) {
         container.innerHTML = '<div class="loading">No frequencies found matching your criteria.</div>';
         return;
     }
-    
+
     // Render based on display mode
     if (displayMode === 'table') {
         container.innerHTML = createFrequenciesTable(filteredFreqs);
     } else {
         container.innerHTML = filteredFreqs.map(freq => createFrequencyCard(freq)).join('');
     }
-    
+
     updateStats();
 }
 
@@ -681,7 +682,7 @@ function renderFrequencyView() {
 function createFrequencyCard(freq) {
     const isListening = activeAudioSessions.has(freq.frequency);
     const cardClass = `station-card ${freq.onAir ? 'on-air' : ''} ${isListening ? 'listening' : ''}`;
-    
+
     return `
         <div class="${cardClass}" data-frequency="${freq.frequency}">
             <div class="station-header">
@@ -742,7 +743,7 @@ function createFrequencyCard(freq) {
 function createStationCard(station) {
     const isListening = activeAudioSessions.has(station.frequency);
     const cardClass = `station-card ${station.onAir ? 'on-air' : ''} ${isListening ? 'listening' : ''}`;
-    
+
     return `
         <div class="${cardClass}" data-frequency="${station.frequency}">
             <div class="station-header">
@@ -833,7 +834,7 @@ function createStationRow(station) {
     const isListening = activeAudioSessions.has(station.frequency);
     const rowClass = `${station.onAir ? 'on-air' : 'off-air'} ${isListening ? 'listening' : ''}`;
     const freqKHz = (station.frequency / 1000).toFixed(0);
-    
+
     return `
         <tr class="${rowClass}" data-frequency="${station.frequency}">
             <td>${freqKHz}</td>
@@ -893,7 +894,7 @@ function createFrequencyRow(freq) {
     const rowClass = `${freq.onAir ? 'on-air' : 'off-air'} ${isListening ? 'listening' : ''}`;
     const freqKHz = (freq.frequency / 1000).toFixed(0);
     const scheduleCount = freq.schedules ? freq.schedules.length : 0;
-    
+
     // Get unique station names from all schedules
     let stationNames = 'N/A';
     if (freq.schedules && freq.schedules.length > 0) {
@@ -910,7 +911,7 @@ function createFrequencyRow(freq) {
     } else if (freq.station) {
         stationNames = freq.station;
     }
-    
+
     return `
         <tr class="${rowClass}" data-frequency="${freq.frequency}">
             <td>${freqKHz}</td>
@@ -943,14 +944,14 @@ function createFrequencyRow(freq) {
  */
 async function toggleAudio(frequency) {
     console.log(`🎛️ Toggle audio for ${frequency / 1000} kHz`);
-    
+
     if (activeAudioSessions.has(frequency)) {
         // Stop audio
         const session = activeAudioSessions.get(frequency);
         console.log(`⏹️ Stopping session ${session.ssrc}`);
         session.stop();
         activeAudioSessions.delete(frequency);
-        
+
         // Stop stream on server
         try {
             await fetch(`/api/audio/stream/${session.ssrc}`, { method: 'DELETE' });
@@ -963,18 +964,18 @@ async function toggleAudio(frequency) {
             console.log(`▶️ Starting audio for ${frequency / 1000} kHz (${frequency} Hz)`);
             const response = await fetch(`/api/audio/stream/${frequency}`);
             if (!response.ok) throw new Error('Failed to start audio stream');
-            
+
             const data = await response.json();
             console.log(`📡 Server response:`, data);
-            
+
             if (!data.success) {
                 throw new Error(data.details || 'Failed to start audio stream');
             }
-            
+
             console.log(`🎧 Creating audio session: SSRC=${data.ssrc}, WS=${data.websocket}`);
             const session = new AudioSession(frequency, data.ssrc, data.websocket);
             const started = await session.start();
-            
+
             if (started) {
                 activeAudioSessions.set(frequency, session);
                 console.log(`✅ Audio session started for ${frequency / 1000} kHz`);
@@ -986,7 +987,7 @@ async function toggleAudio(frequency) {
             alert(`Failed to start audio: ${error.message}\n\nMake sure ka9q-radio is running and accessible.`);
         }
     }
-    
+
     renderStations();
     updateAudioStatus();
 }
@@ -999,7 +1000,7 @@ function stopAllAudio() {
         session.stop();
     }
     activeAudioSessions.clear();
-    
+
     renderStations();
     updateAudioStatus();
 }
@@ -1027,7 +1028,7 @@ function updateAudioStatus() {
     const statusBar = document.getElementById('audio-status');
     const statusText = document.getElementById('audio-status-text');
     const stopButton = document.getElementById('stop-all-audio');
-    
+
     if (activeAudioSessions.size > 0) {
         statusBar.classList.add('active');
         statusText.textContent = `🎵 Listening to ${activeAudioSessions.size} station(s)`;
@@ -1045,13 +1046,13 @@ function updateAudioStatus() {
 function filterByBand(minFreq, maxFreq) {
     // Remove active class from all buttons
     document.querySelectorAll('.band-btn').forEach(btn => btn.classList.remove('active'));
-    
+
     // Set current filter
     currentBandFilter = minFreq ? [minFreq, maxFreq] : null;
-    
+
     // Add active class to clicked button
     event.target.classList.add('active');
-    
+
     renderStations();
 }
 
@@ -1061,13 +1062,13 @@ function filterByBand(minFreq, maxFreq) {
 function filterByTarget(target) {
     // Remove active class from all buttons
     document.querySelectorAll('#target-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
-    
+
     // Set current filter
     currentTargetFilter = target;
-    
+
     // Add active class to clicked button
     event.target.classList.add('active');
-    
+
     console.log(`🌍 Filtering by target: ${target || 'All Regions'}`);
     renderStations();
 }
@@ -1078,13 +1079,13 @@ function filterByTarget(target) {
 function filterByLanguage(language) {
     // Remove active class from all buttons
     document.querySelectorAll('#language-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
-    
+
     // Set current filter
     currentLanguageFilter = language;
-    
+
     // Add active class to clicked button
     event.target.classList.add('active');
-    
+
     console.log(`🗣️ Filtering by language: ${language || 'All Languages'}`);
     renderStations();
 }
@@ -1107,7 +1108,7 @@ function toggleLegend(legendId) {
 function toggleFilterSection(filterId) {
     const filterSection = document.getElementById(filterId);
     const button = event.currentTarget;
-    
+
     if (filterSection.classList.contains('collapsed')) {
         // Expand
         filterSection.classList.remove('collapsed');
@@ -1126,7 +1127,7 @@ async function reloadSchedules() {
     try {
         const response = await fetch('/api/reload', { method: 'POST' });
         if (!response.ok) throw new Error('Failed to reload schedules');
-        
+
         await loadStations();
         alert('✅ Schedules reloaded successfully!');
     } catch (error) {
@@ -1178,16 +1179,16 @@ const FILTER_PRESETS = {
 function openTuningPanel(ssrc, station) {
     currentTuningSSRC = ssrc;
     currentTuningStation = station;
-    
+
     const panel = document.getElementById('tuning-panel');
     const stationInfo = document.getElementById('tuning-station-info');
-    
+
     stationInfo.textContent = `${station.station} - ${(station.frequency / 1000).toFixed(1)} kHz`;
     panel.style.display = 'block';
-    
+
     // Load saved settings or use defaults
     const savedSettings = loadSavedSettings(station.frequency);
-    
+
     document.getElementById('agc-enable').checked = savedSettings.agcEnable || false;
     document.getElementById('manual-gain').value = savedSettings.gain || 30;
     document.getElementById('manual-gain-value').textContent = savedSettings.gain || '30';
@@ -1197,16 +1198,16 @@ function openTuningPanel(ssrc, station) {
     document.getElementById('shift-freq').value = savedSettings.shift || 0;
     document.getElementById('squelch-threshold').value = savedSettings.squelch || -60;
     document.getElementById('squelch-value').textContent = savedSettings.squelch || '-60';
-    
+
     // Set mode and filter preset based on saved settings
     currentMode = savedSettings.mode || 'AM';
     currentFilterPreset = savedSettings.filterPreset || 'medium';
-    
+
     // Update UI to reflect current mode
     updateModeButtons();
     updateFilterButtons();
     updateAGC();
-    
+
     // Update effective frequency display
     updateEffectiveFrequencyDisplay();
 }
@@ -1229,7 +1230,7 @@ function loadSavedSettings(frequency) {
  */
 function savePreset() {
     if (!currentTuningStation) return;
-    
+
     const settings = {
         mode: currentMode,
         filterPreset: currentFilterPreset,
@@ -1240,12 +1241,12 @@ function savePreset() {
         shift: parseFloat(document.getElementById('shift-freq').value),
         squelch: parseFloat(document.getElementById('squelch-threshold').value)
     };
-    
+
     try {
         const key = `tuning_${currentTuningStation.frequency}`;
         localStorage.setItem(key, JSON.stringify(settings));
         console.log('✅ Settings saved for', currentTuningStation.station);
-        
+
         // Visual feedback
         const btn = event.target;
         btn.textContent = '✓ Saved!';
@@ -1264,7 +1265,7 @@ function resetToDefaults() {
     // Reset to AM mode with medium filter
     setModePreset('AM');
     setFilterPreset('medium');
-    
+
     // Reset other controls
     document.getElementById('agc-enable').checked = false;
     document.getElementById('manual-gain').value = 30;
@@ -1272,14 +1273,14 @@ function resetToDefaults() {
     document.getElementById('shift-freq').value = 0;
     document.getElementById('squelch-threshold').value = -60;
     document.getElementById('squelch-value').textContent = '-60';
-    
+
     // Apply changes
     updateAGC();
     updateGain(30);
     updateShift(0);
     updateSquelch(-60);
     updateEffectiveFrequencyDisplay();
-    
+
     console.log('✅ Reset to defaults');
 }
 
@@ -1288,22 +1289,22 @@ function resetToDefaults() {
  */
 function setModePreset(mode) {
     if (!currentTuningSSRC || !MODE_PRESETS[mode]) return;
-    
+
     currentMode = mode;
     const preset = MODE_PRESETS[mode];
-    
+
     // Update filter based on mode
     document.getElementById('filter-low').value = preset.low;
     document.getElementById('filter-high').value = preset.high;
     document.getElementById('shift-freq').value = preset.shift;
-    
+
     // Apply changes
     updateFilter();
     updateShift(preset.shift);
-    
+
     // Update button states
     updateModeButtons();
-    
+
     console.log(`✅ Mode set to ${mode}`);
 }
 
@@ -1325,16 +1326,16 @@ function updateModeButtons() {
  */
 function setFilterPreset(preset) {
     if (!currentTuningSSRC) return;
-    
+
     currentFilterPreset = preset;
-    
+
     if (preset === 'custom') {
         // Show custom filter controls
         document.getElementById('custom-filter-controls').style.display = 'block';
     } else {
         // Hide custom filter controls and apply preset
         document.getElementById('custom-filter-controls').style.display = 'none';
-        
+
         const filterSettings = FILTER_PRESETS[preset];
         if (filterSettings) {
             document.getElementById('filter-low').value = filterSettings.low;
@@ -1342,10 +1343,10 @@ function setFilterPreset(preset) {
             updateFilter();
         }
     }
-    
+
     // Update button states
     updateFilterButtons();
-    
+
     console.log(`✅ Filter preset set to ${preset}`);
 }
 
@@ -1370,7 +1371,7 @@ function updateEffectiveFrequencyDisplay() {
     const mainFreq = parseFloat(document.getElementById('main-freq').value) || 0;
     const shift = parseFloat(document.getElementById('shift-freq').value) || 0;
     const effectiveFreq = mainFreq + (shift / 1000); // Convert shift from Hz to kHz
-    
+
     const display = document.getElementById('effective-frequency');
     if (display) {
         display.textContent = `${effectiveFreq.toFixed(3)} kHz`;
@@ -1415,18 +1416,18 @@ function closeTuningPanel() {
  */
 async function updateAGC() {
     if (!currentTuningSSRC) return;
-    
+
     const enabled = document.getElementById('agc-enable').checked;
     const hangtime = parseFloat(document.getElementById('agc-hangtime').value);
     const headroom = parseFloat(document.getElementById('agc-headroom').value);
-    
+
     console.log(`🎛️ Updating AGC for SSRC ${currentTuningSSRC}: enable=${enabled}, hangtime=${hangtime}, headroom=${headroom}`);
-    
+
     // Show/hide AGC parameters and manual gain based on AGC state
     document.getElementById('agc-params').style.display = enabled ? 'block' : 'none';
     document.getElementById('agc-headroom-ctrl').style.display = enabled ? 'block' : 'none';
     document.getElementById('manual-gain-section').style.display = enabled ? 'none' : 'block';
-    
+
     try {
         const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/agc`, {
             method: 'POST',
@@ -1437,7 +1438,7 @@ async function updateAGC() {
                 headroom: headroom
             })
         });
-        
+
         const data = await response.json();
         if (!response.ok) {
             console.error('❌ Failed to update AGC:', data);
@@ -1462,17 +1463,17 @@ function updateAGCValue(param, value) {
  */
 async function updateGain(value) {
     if (!currentTuningSSRC) return;
-    
+
     document.getElementById('manual-gain-value').textContent = value;
     console.log(`🎛️ Updating gain for SSRC ${currentTuningSSRC}: ${value} dB`);
-    
+
     try {
         const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/gain`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ gain_db: parseFloat(value) })
         });
-        
+
         const data = await response.json();
         if (!response.ok) {
             console.error('❌ Failed to update gain:', data);
@@ -1489,12 +1490,12 @@ async function updateGain(value) {
  */
 async function updateFilter() {
     if (!currentTuningSSRC) return;
-    
+
     const lowEdge = parseFloat(document.getElementById('filter-low').value);
     const highEdge = parseFloat(document.getElementById('filter-high').value);
-    
+
     console.log(`🎛️ Updating filter for SSRC ${currentTuningSSRC}: low=${lowEdge} Hz, high=${highEdge} Hz`);
-    
+
     try {
         const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/filter`, {
             method: 'POST',
@@ -1504,7 +1505,7 @@ async function updateFilter() {
                 high_edge: highEdge
             })
         });
-        
+
         const data = await response.json();
         if (!response.ok) {
             console.error('❌ Failed to update filter:', data);
@@ -1521,19 +1522,19 @@ async function updateFilter() {
  */
 async function updateFrequency(value) {
     if (!currentTuningSSRC) return;
-    
+
     const frequencyHz = parseFloat(value) * 1000; // Convert kHz to Hz
     console.log(`📻 Updating frequency for SSRC ${currentTuningSSRC}: ${value} kHz (${frequencyHz} Hz)`);
-    
+
     updateEffectiveFrequencyDisplay();
-    
+
     try {
         const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/frequency`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ frequency_hz: frequencyHz })
         });
-        
+
         const data = await response.json();
         if (!response.ok) {
             console.error('❌ Failed to update frequency:', data);
@@ -1550,18 +1551,18 @@ async function updateFrequency(value) {
  */
 async function updateShift(value) {
     if (!currentTuningSSRC) return;
-    
+
     console.log(`🎛️ Updating shift for SSRC ${currentTuningSSRC}: ${value} Hz`);
-    
+
     updateEffectiveFrequencyDisplay();
-    
+
     try {
         const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/shift`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ shift_hz: parseFloat(value) })
         });
-        
+
         const data = await response.json();
         if (!response.ok) {
             console.error('❌ Failed to update shift:', data);
@@ -1579,17 +1580,17 @@ async function updateShift(value) {
  */
 async function updateSquelch(value) {
     if (!currentTuningSSRC) return;
-    
+
     document.getElementById('squelch-value').textContent = value;
     console.log(`🔇 Updating squelch for SSRC ${currentTuningSSRC}: ${value} dB`);
-    
+
     try {
         const response = await fetch(`/api/audio/tune/${currentTuningSSRC}/squelch`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ threshold: parseFloat(value) })
         });
-        
+
         const data = await response.json();
         if (!response.ok) {
             console.error('❌ Failed to update squelch:', data);
