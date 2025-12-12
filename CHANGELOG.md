@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 
 **Critical Fix**: Resolved 500 Internal Server Errors during audio stream creation.
 
+- ✅ **Channel Creation Refactor**: Removed legacy method of specifying SSRC during channel creation. Now relies on `radiod` to assign SSRC and client to discover it via multicast.
+- ✅ **Increased Timeout**: Increased channel discovery timeout from 7s to 15s to accommodate slower `radiod` responses during channel creation.
 - ✅ **Robust SSRC Discovery**: Implemented backward compatibility for older `ka9q` libraries. Automatically detects if `request_channel` is missing and falls back to `tune` with local SSRC generation.
 - ✅ **JSON Sanitization**: Fixed server crashes caused by `radiod` reporting `-Infinity` for signal metrics. `radiod_client.py` now sanitizes all float outputs to ensure valid JSON.
 

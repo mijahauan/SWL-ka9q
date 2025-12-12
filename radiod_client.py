@@ -322,7 +322,7 @@ def get_or_create_channel(radiod_host: str, frequency_hz: float,
     import time
     start_time = time.time()
     poll_interval = 0.2
-    max_duration = 7.0
+    max_duration = 15.0
     
     while time.time() - start_time < max_duration:
         # Short sleep to let radiod process request
