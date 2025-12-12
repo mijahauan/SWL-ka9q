@@ -310,6 +310,9 @@ async function init() {
     updateUtcTime();
     setInterval(updateUtcTime, 1000);
     
+    // Discover available radiod instances
+    await discoverRadiod();
+    
     // Load stations
     await loadStations();
     
@@ -318,6 +321,103 @@ async function init() {
     
     // Auto-refresh every 60 seconds
     setInterval(loadStations, 60000);
+}
+
+/**
+ * Discover available radiod instances on the network
+ */
+async function discoverRadiod() {
+    const select = document.getElementById('radiod-select');
+    select.innerHTML = '<option value="">Discovering...</option>';
+    
+    try {
+        const response = await fetch('/api/radiod/discover');
+        const data = await response.json();
+        
+        select.innerHTML = '';
+        
+        if (data.services && data.services.length > 0) {
+            data.services.forEach(service => {
+                const option = document.createElement('option');
+                option.value = service.address;
+                option.textContent = service.name;
+                option.title = `Address: ${service.address}`;
+                
+                // Select current radiod
+                if (service.address === data.current || 
+                    service.name.includes(data.current)) {
+                    option.selected = true;
+                }
+                
+                select.appendChild(option);
+            });
+            
+            // If no match found, add current as custom option
+            if (!select.value && data.current) {
+                const option = document.createElement('option');
+                option.value = data.current;
+                option.textContent = `📍 ${data.current}`;
+                option.selected = true;
+                select.insertBefore(option, select.firstChild);
+            }
+        } else {
+            // No services discovered, show current
+            const option = document.createElement('option');
+            option.value = data.current || 'localhost';
+            option.textContent = data.current || 'localhost';
+            option.selected = true;
+            select.appendChild(option);
+        }
+        
+        console.log(`📻 Found ${data.services?.length || 0} radiod instances`);
+    } catch (error) {
+        console.error('Failed to discover radiod:', error);
+        select.innerHTML = '<option value="">Discovery failed</option>';
+    }
+}
+
+/**
+ * Select a radiod instance
+ */
+async function selectRadiod(address) {
+    if (!address) return;
+    
+    const select = document.getElementById('radiod-select');
+    const originalValue = select.value;
+    
+    try {
+        console.log(`🔄 Switching to radiod: ${address}`);
+        
+        const response = await fetch('/api/radiod/select', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log(`✅ ${data.message}`);
+            
+            // Stop any active audio sessions
+            for (const [freq, session] of activeAudioSessions) {
+                if (session.ws) session.ws.close();
+            }
+            activeAudioSessions.clear();
+            updateListeningCount();
+            
+            // Reload stations (in case different radiod has different coverage)
+            await loadStations();
+        } else {
+            console.error(`❌ Failed to switch radiod: ${data.error}`);
+            alert(`Failed to switch radiod: ${data.error}`);
+            select.value = originalValue;
+        }
+    } catch (error) {
+        console.error('Failed to select radiod:', error);
+        alert('Failed to switch radiod. Check console for details.');
+        select.value = originalValue;
+    }
 }
 
 /**

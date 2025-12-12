@@ -325,41 +325,94 @@ def get_or_create_channel(radiod_host: str, frequency_hz: float,
             'existed': True
         }
     
-    # Strategy 3: Create channel using tune() which waits for radiod confirmation
-    with RadiodControl(radiod_host) as control:
-        # Generate a random SSRC - radiod will use this
-        channel_ssrc = secrets.randbits(31)
+    # Strategy 3: Request new channel (radiod assigns SSRC) and wait for it to appear
+    # This ensures we get the correct SSRC assigned by radiod
+    
+    # 1. Request the channel
+    try:
+        # Check if the installed ka9q package supports request_channel
+        # If not, fall back to legacy behavior (generate SSRC locally)
+        with RadiodControl(radiod_host) as control:
+            try:
+                control.request_channel(
+                    frequency_hz=frequency_hz,
+                    destination=f"{rtp_destination}:{rtp_port}",
+                    preset=preset,
+                    sample_rate=sample_rate,
+                    agc_enable=1 if agc_enable else 0,
+                    gain=gain
+                )
+                request_result = _add_metrics({
+                    'success': True, 
+                    'note': 'Requested from radiod (SSRC pending)'
+                }, control, include_metrics)
+            except AttributeError:
+                # Fallback: Generate random SSRC and use tune()
+                # This supports older ka9q-python versions where request_channel is missing
+                channel_ssrc = secrets.randbits(31)
+                control.tune(
+                    ssrc=channel_ssrc,
+                    frequency_hz=frequency_hz,
+                    preset=preset,
+                    sample_rate=sample_rate,
+                    gain=gain if not agc_enable else None,
+                    agc_enable=agc_enable,
+                    destination=f"{rtp_destination}:{rtp_port}",
+                    timeout=5.0
+                )
+                request_result = _add_metrics({
+                    'success': True,
+                    'ssrc': channel_ssrc, # We know it because we generated it
+                    'mode': 'created_legacy'
+                }, control, include_metrics)
         
-        # Use tune() to create channel and wait for confirmation
-        status = control.tune(
-            ssrc=channel_ssrc,
-            frequency_hz=frequency_hz,
-            preset=preset,
-            sample_rate=sample_rate,
-            gain=gain if not agc_enable else None,
-            agc_enable=agc_enable,
-            destination=f"{rtp_destination}:{rtp_port}",
-            timeout=5.0
+        if not request_result.get('success'):
+            return request_result
+            
+    except Exception as e:
+        error_msg = f"Failed to request channel: {str(e)}"
+        logging.error(error_msg)
+        return {
+            'success': False,
+            'error': error_msg,
+            'mode': 'failed_request'
+        }
+    
+    # 2. Poll for discovery until it appears (or timeout)
+    logging.info("Polling for channel discovery...")
+    import time
+    start_time = time.time()
+    poll_interval = 0.2
+    max_duration = 2.0
+    
+    while time.time() - start_time < max_duration:
+        # Short sleep to let radiod process request
+        time.sleep(poll_interval)
+        
+        found = find_channel_by_frequency(
+            radiod_host, frequency_hz, interface, rtp_destination, tolerance_hz=5.0
         )
         
-        # Build result and cache it
-        result = {
-            'success': True,
-            'ssrc': status.get('ssrc', channel_ssrc),
-            'frequency_hz': status.get('frequency', frequency_hz),
-            'multicast_address': rtp_destination,
-            'port': rtp_port,
-            'sample_rate': status.get('sample_rate', sample_rate),
-            'preset': status.get('preset', preset),
-            'mode': 'created',
-            'existed': False,
-            'confirmed': True
-        }
-        
-        # Cache the new channel
-        _channel_cache[cache_key] = result
-        
-        return _add_metrics(result, control, include_metrics)
+        if found:
+            # Add metrics from the request if available
+            if 'metrics' in request_result:
+                found['metrics'] = request_result['metrics']
+                
+            found['mode'] = 'created'
+            found['confirmed'] = True
+            found['existed'] = False
+            
+            # Cache it
+            _channel_cache[cache_key] = found
+            return found
+            
+    # If we get here, we requested successfully but couldn't discover it
+    return {
+        'success': False,
+        'error': 'Channel requested but not discovered (timeout)',
+        'frequency_hz': frequency_hz,
+        'mode': 'timeout'
+    }
 
 
 def remove_channel(radiod_host: str, ssrc: int = None, frequency_hz: float = None,
@@ -496,7 +549,19 @@ def main():
                                     args.preset, args.sample_rate, False, args.gain,
                                     include_metrics=include_metrics)
         
-        print(json.dumps(result))
+        # Ensure output is valid JSON (handle Infinity/NaN)
+        def clean_floats(obj):
+            if isinstance(obj, float):
+                import math
+                if math.isinf(obj) or math.isnan(obj):
+                    return None
+            elif isinstance(obj, dict):
+                return {k: clean_floats(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [clean_floats(i) for i in obj]
+            return obj
+            
+        print(json.dumps(clean_floats(result)))
         sys.stdout.flush()
         return 0
         

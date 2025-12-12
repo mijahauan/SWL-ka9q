@@ -60,6 +60,49 @@ body {
     color: #1e3c72;
 }
 
+/* Radiod Selector */
+.radiod-selector {
+    flex-direction: row !important;
+    gap: 8px;
+    align-items: center !important;
+}
+
+.radiod-selector select {
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: white;
+    font-size: 13px;
+    color: #333;
+    cursor: pointer;
+    max-width: 200px;
+    text-overflow: ellipsis;
+}
+
+.radiod-selector select:hover {
+    border-color: #1e3c72;
+}
+
+.radiod-selector select:focus {
+    outline: none;
+    border-color: #2a5298;
+    box-shadow: 0 0 0 2px rgba(42, 82, 152, 0.2);
+}
+
+.radiod-refresh-btn {
+    background: none;
+    border: none;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.radiod-refresh-btn:hover {
+    background: rgba(0, 0, 0, 0.1);
+}
+
 /* Container */
 .container {
     max-width: 1400px;

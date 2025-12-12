@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] - 2025-12-11
+
+### Fixed - Audio Stream Reliability
+
+**Critical Fix**: Resolved 500 Internal Server Errors during audio stream creation.
+
+- ✅ **Robust SSRC Discovery**: Implemented backward compatibility for older `ka9q` libraries. Automatically detects if `request_channel` is missing and falls back to `tune` with local SSRC generation.
+- ✅ **JSON Sanitization**: Fixed server crashes caused by `radiod` reporting `-Infinity` for signal metrics. `radiod_client.py` now sanitizes all float outputs to ensure valid JSON.
+
+### Added - Radiod Instance Discovery UI
+
+- ✅ **Instance Selection**: New dropdown menu in the header to select discovered `radiod` instances.
+- ✅ **Refresh Button**: Ability to re-scan for `radiod` instances on the network.
+
 ## [Unreleased] - 2025-11-12
 
 ### Added - Target Region and Language Filtering

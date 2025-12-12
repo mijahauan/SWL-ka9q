@@ -13,6 +13,13 @@
             <p class="nav-subtitle">Shortwave Radio Monitoring with Live Audio</p>
         </div>
         <div class="nav-stats">
+            <div class="stat-item radiod-selector">
+                <span class="stat-label">Radiod</span>
+                <select id="radiod-select" onchange="selectRadiod(this.value)" title="Select radiod instance">
+                    <option value="">Loading...</option>
+                </select>
+                <button class="radiod-refresh-btn" onclick="discoverRadiod()" title="Refresh radiod list">🔄</button>
+            </div>
             <div class="stat-item">
                 <span class="stat-label">Time (UTC)</span>
                 <span class="stat-value" id="utc-time">--:--:--</span>
