@@ -18,10 +18,14 @@ import json
 import os
 import argparse
 import secrets
+import logging
 from typing import Dict, List, Optional
 from ka9q import RadiodControl
 from ka9q.discovery import discover_channels_native
 from ka9q.utils import resolve_multicast_address
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 # Default RTP destination for all SWL-ka9q channels
@@ -30,10 +34,6 @@ DEFAULT_RTP_DESTINATION = os.environ.get('SWL_RTP_DESTINATION', '239.1.2.100')
 DEFAULT_RTP_PORT = int(os.environ.get('SWL_RTP_PORT', '5004'))
 DEFAULT_PRESET = 'am'
 DEFAULT_SAMPLE_RATE = 12000
-
-# Local cache of channels we've created, keyed by (rtp_destination, frequency_hz)
-# This prevents duplicate channel creation when discovery is slow
-_channel_cache: Dict[tuple, Dict] = {}
 
 
 def discover_channels(radiod_host: str, interface: Optional[str] = None, 
@@ -111,7 +111,9 @@ def find_channel_by_frequency(radiod_host: str, frequency_hz: float,
                               interface: Optional[str] = None,
                               rtp_destination: Optional[str] = None,
                               tolerance_hz: float = 1.0,
-                              listen_duration: float = 2.0) -> Optional[Dict]:
+                              listen_duration: float = 2.0,
+                              preset: Optional[str] = None,
+                              sample_rate: Optional[int] = None) -> Optional[Dict]:
     """
     Find an existing channel by frequency in the RTP stream.
     
@@ -122,6 +124,8 @@ def find_channel_by_frequency(radiod_host: str, frequency_hz: float,
         rtp_destination: RTP destination to search in (filters results)
         tolerance_hz: Frequency matching tolerance in Hz
         listen_duration: How long to listen for status packets (default 2.0s)
+        preset: Optional preset to filter by (e.g. 'am')
+        sample_rate: Optional sample rate to filter by (e.g. 12000)
     
     Returns:
         Channel info dict if found, None otherwise
@@ -129,17 +133,32 @@ def find_channel_by_frequency(radiod_host: str, frequency_hz: float,
     discovered = discover_channels(radiod_host, interface, listen_duration=listen_duration,
                                    rtp_destination=rtp_destination)
     
-    # First try exact match by frequency
-    freq_int = int(frequency_hz)
-    if freq_int in discovered.get('channels_by_freq', {}):
-        return discovered['channels_by_freq'][freq_int]
+    # Iterate all channels to find best match that satisfies criteria
+    best_match = None
+    min_diff = float('inf')
     
-    # Try fuzzy match within tolerance
     for ch_info in discovered.get('channels', {}).values():
-        if abs(ch_info['frequency_hz'] - frequency_hz) <= tolerance_hz:
-            return ch_info
+        # Skip closing/closed channels (0 Hz)
+        if ch_info.get('frequency_hz', 0) <= 0:
+            continue
+
+        # Filter by preset if specified
+        if preset and ch_info.get('preset') != preset:
+            continue
+
+        # Filter by sample_rate if specified
+        if sample_rate and ch_info.get('sample_rate') != sample_rate:
+            continue
+            
+        diff = abs(ch_info['frequency_hz'] - frequency_hz)
+        if diff <= tolerance_hz:
+            # Found a match within tolerance
+            # If we have multiple matches (unlikely), pick closest frequency
+            if diff < min_diff:
+                min_diff = diff
+                best_match = ch_info
     
-    return None
+    return best_match
 
 
 def _add_metrics(result: Dict, control: RadiodControl, include_metrics: bool) -> Dict:
@@ -155,74 +174,15 @@ def _add_metrics(result: Dict, control: RadiodControl, include_metrics: bool) ->
     return result
 
 
-def request_channel(radiod_host: str, frequency_hz: float,
-                    rtp_destination: str = None,
-                    rtp_port: int = None,
-                    preset: str = None,
-                    sample_rate: int = None,
-                    agc_enable: bool = False, gain: float = 30.0,
-                    include_metrics: bool = False) -> Dict:
-    """
-    Request a channel from radiod (new paradigm: no SSRC, radiod assigns it).
-    
-    The app provides an RTP destination IP address; radiod assigns the SSRC.
-    After requesting, we discover the channel to get the assigned SSRC.
-    
-    Args:
-        radiod_host: Radiod hostname
-        frequency_hz: Frequency in Hz
-        rtp_destination: RTP destination IP for audio stream (default: SWL_RTP_DESTINATION)
-        rtp_port: RTP destination port (default: 5004)
-        preset: Demodulation preset (default: 'am')
-        sample_rate: Audio sample rate (default: 12000)
-        agc_enable: Enable automatic gain control
-        gain: Manual gain in dB
-        include_metrics: Include ka9q-python metrics in response
-    
-    Returns:
-        Dict with success status and assigned SSRC
-    """
-    rtp_destination = rtp_destination or DEFAULT_RTP_DESTINATION
-    rtp_port = rtp_port or DEFAULT_RTP_PORT
-    preset = preset or DEFAULT_PRESET
-    sample_rate = sample_rate or DEFAULT_SAMPLE_RATE
-    
-    with RadiodControl(radiod_host) as control:
-        # Request channel with destination but no SSRC
-        # radiod will assign an SSRC
-        # Request channel with destination but no SSRC
-        # radiod will assign an SSRC
-        control.create_channel(
-            frequency_hz=frequency_hz,
-            destination=f"{rtp_destination}:{rtp_port}",
-            preset=preset,
-            sample_rate=sample_rate,
-            agc_enable=1 if agc_enable else 0,
-            gain=gain
-        )
-        
-        return _add_metrics({
-            'success': True,
-            'frequency_hz': frequency_hz,
-            'rtp_destination': rtp_destination,
-            'rtp_port': rtp_port,
-            'preset': preset,
-            'sample_rate': sample_rate,
-            'note': 'Channel requested; SSRC assigned by radiod'
-        }, control, include_metrics)
-
-
-
-
-def get_or_create_channel(radiod_host: str, frequency_hz: float,
-                         interface: Optional[str] = None,
-                         rtp_destination: str = None,
-                         rtp_port: int = None,
-                         preset: str = None,
-                         sample_rate: int = None,
-                         agc_enable: bool = False, gain: float = 30.0,
-                         include_metrics: bool = False,
-                         ssrc: int = None) -> Dict:
+def get_or_create_channel(radiod_host: str, frequency: float,
+                          interface: Optional[str] = None,
+                          rtp_destination: str = DEFAULT_RTP_DESTINATION,
+                          rtp_port: int = DEFAULT_RTP_PORT,
+                          preset: str = DEFAULT_PRESET,
+                          sample_rate: int = DEFAULT_SAMPLE_RATE,
+                          gain: float = 30.0,
+                          agc_enable: bool = False,
+                          include_metrics: bool = False) -> Dict:
     """
     Get an existing channel or create it if it doesn't exist.
     
@@ -241,10 +201,9 @@ def get_or_create_channel(radiod_host: str, frequency_hz: float,
         rtp_port: RTP destination port (default: 5004)
         preset: Demodulation preset (default: 'am')
         sample_rate: Audio sample rate (default: 12000)
-        agc_enable: Enable AGC
         gain: Manual gain in dB
+        agc_enable: Enable AGC
         include_metrics: Include ka9q-python metrics in response
-        ssrc: DEPRECATED - ignored, radiod assigns SSRC
     
     Returns:
         Dict with channel information including SSRC, multicast address and port
@@ -254,31 +213,15 @@ def get_or_create_channel(radiod_host: str, frequency_hz: float,
     preset = preset or DEFAULT_PRESET
     sample_rate = sample_rate or DEFAULT_SAMPLE_RATE
     
-    # Cache key for this frequency on this RTP destination
-    cache_key = (rtp_destination, int(frequency_hz))
-    
-    # Strategy 1: Check local cache first (fastest)
-    if cache_key in _channel_cache:
-        cached = _channel_cache[cache_key]
-        return {
-            'success': True,
-            'ssrc': cached['ssrc'],
-            'frequency_hz': cached['frequency_hz'],
-            'multicast_address': cached['multicast_address'],
-            'port': cached['port'],
-            'sample_rate': cached['sample_rate'],
-            'preset': cached['preset'],
-            'mode': 'cached',
-            'existed': True
-        }
-    
-    # Strategy 2: Check if channel already exists via discovery
+    start_frequency = frequency  # Keep original for offset logic
+    frequency_hz = int(frequency)
+
+    # Strategy 1: Check if channel already exists via discovery
+    # Pass preset and sample_rate to ensure we don't pick up a channel with wrong modulation or rate
     existing = find_channel_by_frequency(
-        radiod_host, frequency_hz, interface, rtp_destination
+        radiod_host, frequency_hz, interface, rtp_destination, preset=preset, sample_rate=sample_rate
     )
     if existing:
-        # Add to cache
-        _channel_cache[cache_key] = existing
         return {
             'success': True,
             'ssrc': existing['ssrc'],
@@ -291,72 +234,55 @@ def get_or_create_channel(radiod_host: str, frequency_hz: float,
             'existed': True
         }
     
-    # Strategy 3: Request new channel (radiod assigns SSRC) and wait for it to appear
-    # This ensures we get the correct SSRC assigned by radiod
-    
-    # 1. Request the channel
-    request_error = None
+    # Strategy 2: Request new channel using ensure_channel (standard API)
+    # This methodology verifies the channel creation before returning
     try:
         with RadiodControl(radiod_host) as control:
-            control.create_channel(
+            print(f"DEBUG: Requesting channel via ensure_channel: {frequency_hz} Hz, "
+                  f"{preset}, {sample_rate} Hz, AGC={agc_enable}", file=sys.stderr)
+            
+            # ensure_channel handles request + verification polling internally
+            # It will raise TimeoutError if the channel doesn't appear or match specs
+            # (e.g. if radiod closes it due to collision)
+            channel = control.ensure_channel(
                 frequency_hz=frequency_hz,
                 destination=f"{rtp_destination}:{rtp_port}",
                 preset=preset,
                 sample_rate=sample_rate,
                 agc_enable=1 if agc_enable else 0,
-                gain=gain
+                gain=gain,
+                timeout=10.0  # Reduced from 20s as ensures are typically fast
             )
-            request_result = _add_metrics({
-                'success': True, 
-                'note': 'Requested from radiod (SSRC pending)'
-            }, control, include_metrics)
-
-    except Exception as e:
-        # If request failed (e.g. timeout), the channel might still have been created.
-        # We'll save the error and let discovery check if it exists.
-        request_error = str(e)
-        request_result = {'success': False}
-    
-    # 2. Poll for discovery until it appears (or timeout)
-    import time
-    start_time = time.time()
-    poll_interval = 0.2
-    max_duration = 20.0 # reduced from 15.0 since we expect immediate appearance if successful
-    
-    while time.time() - start_time < max_duration:
-        # Short sleep to let radiod process request
-        time.sleep(poll_interval)
-        
-        found = find_channel_by_frequency(
-            radiod_host, frequency_hz, interface, rtp_destination, tolerance_hz=5.0
-        )
-        
-        if found:
-            # Add metrics from the request if available
-            if 'metrics' in request_result:
-                found['metrics'] = request_result['metrics']
-                
+            
+            found = channel.__dict__  # Convert ChannelInfo to dict
+            found['success'] = True
             found['mode'] = 'created'
             found['confirmed'] = True
             found['existed'] = False
             
-            # If we had a request error but found the channel, log a warning note
-            if request_error:
-                found['note'] = f"Channel found despite request error: {request_error}"
-            
-            found['success'] = True
-            
-            # Cache it
-            _channel_cache[cache_key] = found
-            return found
-            
-    # If we get here, we requested (or tried to) but couldn't discover it
-    return {
-        'success': False,
-        'error': f'Channel requested but not discovered. Request error: {request_error}' if request_error else 'Channel requested but not discovered (timeout)',
-        'frequency_hz': frequency_hz,
-        'mode': 'timeout'
-    }
+            # Add metrics if requested
+            return _add_metrics(found, control, include_metrics)
+
+    except Exception as e:
+        # If ensure_channel failed (TimeoutError or other), it means collision or failure
+        # Check for collision handling
+        print(f"DEBUG: ensure_channel failed for {frequency_hz} Hz: {e}. "
+              f"Checking for collision retry...", file=sys.stderr)
+        
+        # Retry with offset if appropriate
+        if frequency_hz % 100 == 0:
+             print(f"DEBUG: Retrying with +100 Hz offset...", file=sys.stderr)
+             # Recursive call with offset frequency
+             return get_or_create_channel(
+                 radiod_host, start_frequency + 100, interface, rtp_destination, 
+                 rtp_port, preset, sample_rate, gain, agc_enable, include_metrics
+             )
+        
+        return {
+            'success': False,
+            'error': f'Failed to ensure channel: {str(e)}',
+            'frequency_hz': frequency_hz
+        }
 
 
 def remove_channel(radiod_host: str, ssrc: int = None, frequency_hz: float = None,
@@ -404,11 +330,6 @@ def remove_channel(radiod_host: str, ssrc: int = None, frequency_hz: float = Non
         # remove_channel sets frequency to 0, which marks channel for removal
         control.remove_channel(ssrc=ssrc)
         
-        # Clear from cache if present
-        if frequency_hz:
-            cache_key = (rtp_destination, int(frequency_hz))
-            _channel_cache.pop(cache_key, None)
-        
         return _add_metrics({
             'success': True,
             'ssrc': ssrc
@@ -433,13 +354,6 @@ def main():
     discover_parser.add_argument('--duration', type=float, default=3.0,
                                 help='Listen duration in seconds')
     
-    # Request command (new paradigm: no SSRC)
-    request_parser = subparsers.add_parser('request', help='Request a channel (radiod assigns SSRC)')
-    request_parser.add_argument('--frequency', type=float, required=True, help='Frequency in Hz')
-    request_parser.add_argument('--preset', default=DEFAULT_PRESET)
-    request_parser.add_argument('--sample-rate', type=int, default=DEFAULT_SAMPLE_RATE)
-    request_parser.add_argument('--gain', type=float, default=30.0)
-    
     # Get-or-create command (recommended - searches first, then requests)
     get_create_parser = subparsers.add_parser('get-or-create',
                                               help='Get existing or create new channel')
@@ -447,7 +361,7 @@ def main():
     get_create_parser.add_argument('--preset', default=DEFAULT_PRESET)
     get_create_parser.add_argument('--sample-rate', type=int, default=DEFAULT_SAMPLE_RATE)
     get_create_parser.add_argument('--gain', type=float, default=30.0)
-    get_create_parser.add_argument('--ssrc', type=int, help='DEPRECATED: ignored, radiod assigns SSRC')
+    get_create_parser.add_argument('--agc-enable', action='store_true', help='Enable AGC')
     
     # Remove command (can use SSRC or frequency)
     remove_parser = subparsers.add_parser('remove', help='Remove a channel')
@@ -465,17 +379,13 @@ def main():
         if args.command == 'discover':
             result = discover_channels(args.radiod_host, args.interface, args.duration,
                                        rtp_destination=rtp_dest)
-        elif args.command == 'request':
-            result = request_channel(args.radiod_host, args.frequency,
-                                     rtp_destination=rtp_dest, rtp_port=rtp_port,
-                                     preset=args.preset, sample_rate=args.sample_rate,
-                                     gain=args.gain, include_metrics=include_metrics)
         elif args.command == 'get-or-create':
             result = get_or_create_channel(args.radiod_host, args.frequency,
                                            interface=args.interface,
                                            rtp_destination=rtp_dest, rtp_port=rtp_port,
                                            preset=args.preset, sample_rate=args.sample_rate,
-                                           gain=args.gain, include_metrics=include_metrics)
+                                           gain=args.gain, agc_enable=args.agc_enable,
+                                           include_metrics=include_metrics)
         elif args.command == 'remove':
             result = remove_channel(args.radiod_host, ssrc=args.ssrc, frequency_hz=args.frequency,
                                     interface=args.interface, rtp_destination=rtp_dest,

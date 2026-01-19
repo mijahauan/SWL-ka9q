@@ -169,7 +169,12 @@ Look at the Node.js server console output when you try to play audio:
 - `socket.gaierror` or `ConnectionRefusedError` → Check hostname/network
 - `Timeout` → radiod not responding, check if it's running
 
-## Common Issues and Solutions
+### Audio Issues
+
+#### 1. Audio works on localhost but not on other computers
+If you can hear audio when running SWL-ka9q on the same machine as `radiod`, but not on other computers on the LAN:
+- **Check TTL**: `radiod` must be configured with a Time-To-Live (TTL) of at least 1 for multicast packets to leave the local interface.
+- **Check Firewall**: Ensure UDP port 5004 (or your configured RTP port) is allowed through the firewall on the `radiod` machine.
 
 ### Issue: "ka9q package not installed"
 

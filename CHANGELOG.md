@@ -2,10 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] - 2026-01-19
+
+### Changed - Legacy Code Cleanup
+
+**Maintenance**: Removed deprecated and legacy code from `radiod_client.py` to align with modern `ka9q-python` usage patterns.
+
+- ✅ **Removed Legacy Functions**: Deleted unused `request_channel` function and associated CLI command.
+- ✅ **API Cleanup**: Removed deprecated `ssrc` argument from `get_or_create_channel` and CLI tools. `radiod` now exclusively handles SSRC assignment.
+- ✅ **Cache Removal**: Removed ineffective one-shot channel cache logic.
+- ✅ **Standardization**: Enforced consistent use of `ensure_channel` for channel creation and validation.
+
 ## [Unreleased] - 2025-12-11
+
 - **Fixed:** Critical bug in `radiod_client.py` interfering with audio stream creation (replaced `request_channel` with `create_channel` and added robust timeout handling).
 - **Fixed:** Resolved a JavaScript error (`ReferenceError`) when switching radiod instances in the web interface.
 - **Fixed:** Increased audio channel discovery timeout to 20s to reliably detect new channels even with network latency or packet loss.
+
 ### Fixed - Audio Stream Reliability
 
 **Critical Fix**: Resolved 500 Internal Server Errors during audio stream creation.
@@ -27,6 +40,7 @@ All notable changes to this project will be documented in this file.
 **New Feature**: Advanced filtering by broadcast target region and language with interactive legends.
 
 **Features**:
+
 - ✅ **Dynamic Filter Generation**: Automatically extracts and displays all unique target regions and languages from loaded schedules
 - ✅ **Target Region Filter**: Click to filter broadcasts by intended audience region (e.g., "NAm", "EAs", "Eu")
 - ✅ **Language Filter**: Click to filter broadcasts by language (e.g., "English", "Chinese", "Spanish")
@@ -38,12 +52,14 @@ All notable changes to this project will be documented in this file.
 - ✅ **Responsive Design**: Filter buttons and legends adapt to mobile screens
 
 **UI Elements**:
+
 - "🌍 Filter by Target Region" section with dynamically populated region buttons
 - "🗣️ Filter by Language" section with dynamically populated language buttons
 - "All Regions" and "All Languages" buttons to clear filters
 - Alphabetically sorted filter options
 
 **Technical Details**:
+
 - Filters work on both Time Schedule and Frequency views
 - Frequency view filters schedules within each frequency entry
 - Filters update on every station load
@@ -54,6 +70,7 @@ All notable changes to this project will be documented in this file.
 **New Feature**: Real-time display of effective tuning frequency.
 
 **Features**:
+
 - ✅ **Effective Frequency**: Shows main frequency + shift in kHz with 3 decimal precision
 - ✅ **Real-time Updates**: Updates instantly when frequency or shift controls change
 - ✅ **Prominent Display**: Large blue gradient display box in tuning panel
@@ -64,6 +81,7 @@ All notable changes to this project will be documented in this file.
 **Major Feature Update**: Completely redesigned tuning panel with professional-grade controls inspired by ka9q-web.
 
 **New Features**:
+
 - ✅ **Mode Presets**: One-click switching between AM, USB, LSB, and CW modes with appropriate filters
 - ✅ **Filter Bandwidth Presets**: Quick selection of Narrow (6 kHz), Medium (10 kHz), Wide (15 kHz), or Custom filters
 - ✅ **Quick Frequency Tuning**: +/- buttons for rapid frequency adjustments (-10, -5, -1, +1, +5, +10 kHz)
@@ -74,16 +92,19 @@ All notable changes to this project will be documented in this file.
 - ✅ **Improved UI/UX**: Better organized controls with emoji icons and clear labeling
 
 **Mode Presets**:
+
 - **AM Broadcast**: ±5 kHz filter (default for shortwave broadcasts)
 - **USB**: 200-2800 Hz filter for upper sideband
 - **LSB**: -2800 to -200 Hz filter for lower sideband  
 - **CW**: ±250 Hz filter with 800 Hz shift for Morse code
 
 **Backend API Additions**:
+
 - `POST /api/audio/tune/:ssrc/squelch` - Set squelch threshold
 - `setSquelch()` method in Ka9qRadioProxy class
 
 **Frontend Enhancements**:
+
 - Mode preset system with visual feedback
 - Filter preset buttons with active state tracking
 - Frequency adjustment helpers (adjustFrequency, adjustShift)
@@ -92,6 +113,7 @@ All notable changes to this project will be documented in this file.
 - Enhanced CSS with hover effects and smooth transitions
 
 **Technical Improvements**:
+
 - Better control ranges optimized for broadcast monitoring
 - Visual feedback on all preset buttons
 - Persistent settings across sessions
@@ -104,11 +126,13 @@ All notable changes to this project will be documented in this file.
 **Problem**: The ka9q-python library validates that frequency must be `0 < freq < 10 THz`, which prevented setting frequency to 0 Hz. However, radiod itself accepts frequency 0 as a signal to poll and delete the channel.
 
 **Solution**:
+
 - ✅ **Bypass Validation**: Manually construct TLV command to set frequency to 0 Hz
 - ✅ **Direct Command**: Use `encode_double()`, `encode_int()`, and `encode_eol()` to build command buffer
 - ✅ **Proper Cleanup**: Channels now properly deleted from radiod when audio stops
 
 **Technical Details**:
+
 - Modified `stopAudioStream()` in server.js
 - Constructs TLV command buffer directly instead of calling `control.set_frequency(ssrc, 0)`
 - Sends command via `control.send_command(cmdbuffer)` to bypass library validation
@@ -119,11 +143,13 @@ All notable changes to this project will be documented in this file.
 **Improvement**: Expanded language code mappings from 8 to 80+ languages.
 
 **Changes**:
+
 - ✅ **Comprehensive Coverage**: Added all EiBi standard language codes
 - ✅ **Better Tooltips**: Hover over language buttons now shows full language names instead of abbreviations
 - ✅ **Regional Variants**: Includes regional language variants (e.g., Mandarin vs Cantonese)
 
 **Language Coverage**:
+
 - **Common languages**: Arabic, Chinese, English, French, German, Spanish, Russian, Portuguese
 - **European languages**: Albanian, Bulgarian, Croatian, Czech, Danish, Finnish, Greek, Hungarian
 - **Asian languages**: Bengali, Hindi, Indonesian, Japanese, Korean, Khmer, Thai, Vietnamese
@@ -136,6 +162,7 @@ All notable changes to this project will be documented in this file.
 **New Documentation**: Created comprehensive INSTALL.md guide for first-time users.
 
 **Setup Script Enhancements**:
+
 - ✅ **Python Version Check**: Detects and displays Python version before setup
 - ✅ **Venv Error Handling**: Catches venv creation failures and provides clear fix instructions
 - ✅ **Colored Output**: Green/red/yellow/blue colors for better readability
@@ -143,11 +170,13 @@ All notable changes to this project will be documented in this file.
 - ✅ **Better Error Messages**: Specific instructions for each failure scenario
 
 **Start Script Improvements**:
+
 - ✅ **Dependency Validation**: Checks for venv/ and node_modules/ before starting
 - ✅ **Helpful Errors**: Guides users to run setup if dependencies missing
 - ✅ **Prevents Confusion**: Won't try to start with incomplete setup
 
 **Documentation Updates**:
+
 - ✅ **INSTALL.md**: Comprehensive installation guide with troubleshooting section
 - ✅ **README.md**: Added one-command setup and python3-venv requirement note
 - ✅ **QUICKSTART.md**: Updated with npm run setup command and error handling
@@ -164,6 +193,7 @@ On Debian/Ubuntu with Python 3.11+, users encounter "externally-managed-environm
 **Major Improvement**: The application now uses native Python channel discovery instead of relying on the external `control` executable from ka9q-radio.
 
 **Benefits**:
+
 - ✅ **No external dependencies**: `control` executable no longer required
 - ✅ **Cross-platform**: Works on macOS, Linux, Windows without ka9q-radio tools
 - ✅ **More reliable**: Direct multicast listener implementation in pure Python
@@ -171,29 +201,34 @@ On Debian/Ubuntu with Python 3.11+, users encounter "externally-managed-environm
 - ✅ **Easier deployment**: One less dependency to install
 
 **Technical Details**:
+
 - Updated ka9q-python from old version to v1.0.0 (commit d4c2e27)
 - `discover_channels()` now uses native Python multicast listener by default
 - Automatically falls back to `control` utility if needed (but not required)
 - Enhanced mDNS resolution with multi-tier fallback (avahi-resolve → dns-sd → getaddrinfo)
 
 **What Changed**:
+
 - Python virtual environment (`venv/`) now includes latest ka9q-python package
 - Channel discovery happens via pure Python (listens to radiod status multicast)
 - Server.js code uses same API but benefits from native implementation
 - No changes needed to application code - upgrade is transparent
 
-**Migration**: 
+**Migration**:
 Simply run `./setup-venv.sh` to upgrade the ka9q-python package:
+
 ```bash
 ./setup-venv.sh
 ```
 
 Or manually upgrade:
+
 ```bash
 ./venv/bin/pip3 install --upgrade git+https://github.com/mijahauan/ka9q-python.git
 ```
 
 **Verification**:
+
 ```bash
 ./venv/bin/python3 -c "import ka9q; print(f'ka9q v{ka9q.__version__}'); print('Native discovery:', 'discover_channels_native' in ka9q.__all__)"
 ```
