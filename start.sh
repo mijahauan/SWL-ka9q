@@ -73,6 +73,12 @@ if [ -z "$RADIOD_HOSTNAME" ]; then
     RADIOD_HOSTNAME="localhost"
 fi
 
+# Validate hostname format (security check)
+if [[ ! "$RADIOD_HOSTNAME" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+    echo -e "${RED}❌ Error: Invalid hostname format. Use alphanumeric, dots, and dashes only.${NC}"
+    exit 1
+fi
+
 echo ""
 echo -e "${BLUE}📻 Starting server with radiod hostname: ${RADIOD_HOSTNAME}${NC}"
 echo ""
@@ -185,11 +191,15 @@ fi
 
 # Detect the physical network interface IP (ignore ZeroTier/VPN interfaces)
 if [ -z "$KA9Q_MULTICAST_INTERFACE" ]; then
-    # Get the interface that can reach radiod (but only if it's a physical interface)
-    PHYSICAL_IP=$(ip addr show enp4s0f0 2>/dev/null | grep -oP 'inet \K[\d.]+' | head -1)
-    if [ ! -z "$PHYSICAL_IP" ]; then
-        KA9Q_MULTICAST_INTERFACE="$PHYSICAL_IP"
-        echo -e "${GREEN}📡 Using physical network interface: ${PHYSICAL_IP} (enp4s0f0)${NC}"
+    # Get the interface that has the default route
+    DEFAULT_IFACE=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'dev \K\S+' | head -1)
+    
+    if [ ! -z "$DEFAULT_IFACE" ]; then
+        PHYSICAL_IP=$(ip addr show "$DEFAULT_IFACE" 2>/dev/null | grep -oP 'inet \K[\d.]+' | head -1)
+        if [ ! -z "$PHYSICAL_IP" ]; then
+            KA9Q_MULTICAST_INTERFACE="$PHYSICAL_IP"
+            echo -e "${GREEN}📡 Using network interface: ${PHYSICAL_IP} (${DEFAULT_IFACE})${NC}"
+        fi
     fi
 fi
 

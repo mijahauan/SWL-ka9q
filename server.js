@@ -91,6 +91,23 @@ class Ka9qRadioProxy extends EventEmitter {
     console.log(`   Radiod: ${RADIOD_HOSTNAME}`);
     console.log(`   Interface: ${MULTICAST_INTERFACE || 'default'}`);
     console.log(`   Note: Remote client mode - using control socket + hardcoded multicast`);
+    // Initialize control socket for status reception
+    this.controlSocket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+    this.controlSocket.on('error', (err) => {
+      console.error('❌ Control socket error:', err);
+    });
+    this.controlSocket.bind(KA9Q_STATUS_PORT, '0.0.0.0', () => {
+      this.controlSocket.setMulticastLoopback(true);
+      if (MULTICAST_INTERFACE) {
+        try {
+          this.controlSocket.setMulticastInterface(MULTICAST_INTERFACE);
+        } catch (err) {
+          console.warn(`⚠️  Could not set multicast interface for control socket: ${err.message}`);
+        }
+      }
+      this.setupStatusReception();
+    });
+
     this.setupAudioSocket();
   }
 
@@ -313,6 +330,7 @@ class Ka9qRadioProxy extends EventEmitter {
         // Log first packet from each unknown SSRC, then ignore
         if (!this.loggedOrphanRtp.has(ssrc)) {
           console.warn(`📭 RTP packets arriving for SSRC ${ssrc} but no WebSocket session is active`);
+          console.warn(`   Active sessions: ${Array.from(global.audioSessions ? global.audioSessions.keys() : []).join(', ')}`);
           this.loggedOrphanRtp.add(ssrc);
         }
         return; // Early exit - don't process packets we don't need
@@ -417,7 +435,7 @@ class Ka9qRadioProxy extends EventEmitter {
     const metricsArg = INCLUDE_KA9Q_METRICS ? '--include-metrics' : '';
     const scriptPath = path.join(__dirname, 'radiod_client.py');
     // Use -u for unbuffered Python output
-    const cmd = `${PYTHON_CMD} -u ${scriptPath} --radiod-host ${RADIOD_HOSTNAME} ${interfaceArg} ${rtpDestArg} ${rtpPortArg} ${metricsArg} get-or-create --frequency ${frequency} --preset am --sample-rate 12000 --gain 30.0`;
+    const cmd = `${PYTHON_CMD} -u ${scriptPath} --radiod-host ${RADIOD_HOSTNAME} ${interfaceArg} ${rtpDestArg} ${rtpPortArg} ${metricsArg} get-or-create --frequency ${frequency} --preset am --sample-rate 12000 --agc-enable --gain 30.0`;
 
     try {
       const { stdout, stderr } = await execAsync(cmd, { timeout: 30000 });
@@ -540,38 +558,73 @@ class Ka9qRadioProxy extends EventEmitter {
   }
 
   async setAGC(ssrc, enable, hangtime, headroom) {
-    const enablePython = enable ? 'True' : 'False';
-    return this.executeTuningCommand(ssrc, `control.set_agc(ssrc=${ssrc}, enable=${enablePython}, hangtime=${hangtime}, headroom=${headroom})`);
+    return this.executeTuningCommand(ssrc, 'set_agc', {
+      ssrc: ssrc,
+      enable: !!enable, // Ensure boolean
+      hangtime: parseFloat(hangtime),
+      headroom: parseFloat(headroom)
+    });
   }
 
   async setGain(ssrc, gain_db) {
-    return this.executeTuningCommand(ssrc, `control.set_gain(ssrc=${ssrc}, gain_db=${gain_db})`);
+    return this.executeTuningCommand(ssrc, 'set_gain', {
+      ssrc: ssrc,
+      gain_db: parseFloat(gain_db)
+    });
   }
 
   async setFilter(ssrc, low_edge, high_edge) {
-    return this.executeTuningCommand(ssrc, `control.set_filter(ssrc=${ssrc}, low_edge=${low_edge}, high_edge=${high_edge})`);
+    return this.executeTuningCommand(ssrc, 'set_filter', {
+      ssrc: ssrc,
+      low_edge: parseFloat(low_edge),
+      high_edge: parseFloat(high_edge)
+    });
   }
 
   async setFrequency(ssrc, frequency_hz) {
-    return this.executeTuningCommand(ssrc, `control.set_frequency(ssrc=${ssrc}, frequency_hz=${frequency_hz})`);
+    return this.executeTuningCommand(ssrc, 'set_frequency', {
+      ssrc: ssrc,
+      frequency_hz: parseFloat(frequency_hz)
+    });
   }
 
   async setShift(ssrc, shift_hz) {
-    return this.executeTuningCommand(ssrc, `control.set_shift_frequency(ssrc=${ssrc}, shift_hz=${shift_hz})`);
+    return this.executeTuningCommand(ssrc, 'set_shift_frequency', {
+      ssrc: ssrc,
+      shift_hz: parseFloat(shift_hz)
+    });
   }
 
   async setSquelch(ssrc, threshold) {
-    return this.executeTuningCommand(ssrc, `control.set_squelch_open(ssrc=${ssrc}, level=${threshold})`);
+    return this.executeTuningCommand(ssrc, 'set_squelch_open', {
+      ssrc: ssrc,
+      level: parseFloat(threshold)
+    });
   }
 
-  async executeTuningCommand(ssrc, command) {
+  async executeTuningCommand(ssrc, method, params = {}) {
     try {
+      // Input validation
+      if (!Number.isInteger(ssrc)) throw new Error("Invalid SSRC: must be an integer");
+      if (!/^[a-zA-Z0-9_]+$/.test(method)) throw new Error("Invalid method name");
+
+      // Serialize params safely to JSON
+      // Escape single quotes because we wrap the JSON in single quotes in the Python script
+      const paramsJson = JSON.stringify(params).replace(/'/g, "\\'");
+
       const pythonScript = `import sys
 import json
 try:
     from ka9q import RadiodControl
+    # Safe method dispatch
     control = RadiodControl('${RADIOD_HOSTNAME}')
-    ${command}
+    method_name = '${method}'
+    params = json.loads('${paramsJson}')
+    
+    if not hasattr(control, method_name):
+        raise AttributeError(f"Method {method_name} not found")
+        
+    getattr(control, method_name)(**params)
     print(json.dumps({'success': True, 'ssrc': ${ssrc}}))
 except Exception as e:
     import traceback
@@ -580,27 +633,29 @@ except Exception as e:
     print(json.dumps({'success': False, 'error': str(e)}))
     sys.exit(1)`;
 
-      // Async execution using stdin
+      // Async execution using base64 to avoid shell escaping issues
+      // This is much safer than trying to escape quotes
+      const base64Script = Buffer.from(pythonScript).toString('base64');
       const { stdout, stderr } = await execAsync(
-        `echo "${pythonScript.replace(/"/g, '\\"')}" | ${PYTHON_CMD}`,
+        `echo "${base64Script}" | base64 -d | ${PYTHON_CMD} -u`,
         { timeout: 5000 }
       );
 
       // Log stderr if present for debugging
       if (stderr && stderr.trim()) {
-        console.error(`⚠️ Python stderr for SSRC ${ssrc}:`, stderr.trim());
+        console.error(`⚠️ Python stderr for SSRC ${ssrc}: `, stderr.trim());
       }
 
       const result = JSON.parse(stdout.trim());
       if (result.success) {
-        console.log(`✅ Tuning command succeeded for SSRC ${ssrc}: ${command}`);
+        console.log(`✅ Tuning command succeeded for SSRC ${ssrc}: ${method} ${JSON.stringify(params)}`);
         return result;
       } else {
-        console.error(`❌ Tuning command returned error:`, result.error);
+        console.error(`❌ Tuning command returned error: `, result.error);
         throw new Error(result.error || 'Unknown error');
       }
     } catch (error) {
-      console.error(`❌ Tuning command failed for SSRC ${ssrc}:`, error.message);
+      console.error(`❌ Tuning command failed for SSRC ${ssrc}: `, error.message);
       throw error;
     }
   }
@@ -627,12 +682,12 @@ except Exception as e:
         // Extract base hostname (e.g., "bee1" from "bee1-hf-status.local")
         const radiodBase = RADIOD_HOSTNAME.split('-')[0]; // e.g., "bee1"
         if (!hostname.startsWith(radiodBase) && !service.name.startsWith(radiodBase)) {
-          console.log(`   ⏭️  Skipping (not from ${radiodBase})`);
+          console.log(`   ⏭️  Skipping(not from ${radiodBase})`);
           return;
         }
 
-        console.log(`📡 Discovered channel on ${RADIOD_HOSTNAME}: ${service.name}`);
-        console.log(`   RTP: ${address}:${port}`);
+        console.log(`📡 Discovered channel on ${RADIOD_HOSTNAME}: ${service.name} `);
+        console.log(`   RTP: ${address}:${port} `);
 
         // Store discovered channel info
         this.discoveredChannels.set(address, {
@@ -648,12 +703,12 @@ except Exception as e:
         // Do NOT join AUDIO group (5004) - that's joined on demand to avoid data flood
         try {
           this.controlSocket.addMembership(address, MULTICAST_INTERFACE || '0.0.0.0');
-          console.log(`✅ Joined status group: ${address}:5006 (not audio)`);
+          console.log(`✅ Joined status group: ${address}: 5006(not audio)`);
         } catch (err) {
-          console.warn(`⚠️  Could not join status group: ${err.message}`);
+          console.warn(`⚠️  Could not join status group: ${err.message} `);
         }
       } catch (err) {
-        console.error(`❌ Error processing discovered service:`, err.message);
+        console.error(`❌ Error processing discovered service: `, err.message);
       }
     });
 
@@ -672,18 +727,18 @@ except Exception as e:
     // Join the status multicast group (same IP, port 5006)
     try {
       this.controlSocket.addMembership(address, MULTICAST_INTERFACE || '0.0.0.0');
-      console.log(`✅ Joined status group: ${address}:5006`);
+      console.log(`✅ Joined status group: ${address}: 5006`);
     } catch (err) {
-      console.warn(`⚠️  Could not join status group ${address}: ${err.message}`);
+      console.warn(`⚠️  Could not join status group ${address}: ${err.message} `);
     }
 
     // Join the audio/RTP multicast group
     try {
       this.audioSocket.addMembership(address, MULTICAST_INTERFACE || '0.0.0.0');
       this.joinedMulticastGroups.add(address);
-      console.log(`✅ Joined audio group: ${address}:5004`);
+      console.log(`✅ Joined audio group: ${address}: 5004`);
     } catch (err) {
-      console.warn(`⚠️  Could not join audio group ${address}: ${err.message}`);
+      console.warn(`⚠️  Could not join audio group ${address}: ${err.message} `);
     }
   }
 
@@ -784,7 +839,7 @@ function parseTimeSchedule() {
           stations.push({
             frequency: freq,
             station: stationName.trim(),
-            time: `${startTime}-${endTime}`,
+            time: `${startTime} -${endTime} `,
             days: daysPart ? daysPart.trim() : 'daily',
             language: language.trim(),
             target: target.trim(),
@@ -934,12 +989,12 @@ function getCurrentEiBiSeason() {
   // If April-October, use A-season
   if (month >= 3 && month <= 9) {
     // April-October: Use A-season
-    return `sked-a${year.toString().slice(-2)}.txt`;
+    return `sked - a${year.toString().slice(-2)}.txt`;
   } else {
     // November-March: Use B-season
     // If Jan-March, use previous year's B-season
     const scheduleYear = month <= 2 ? year - 1 : year;
-    return `sked-b${scheduleYear.toString().slice(-2)}.txt`;
+    return `sked - b${scheduleYear.toString().slice(-2)}.txt`;
   }
 }
 
@@ -1148,6 +1203,15 @@ app.post('/api/radiod/select', async (req, res) => {
     return res.status(400).json({
       success: false,
       error: 'Must provide hostname or address'
+    });
+  }
+
+  // Validate hostname format to prevent command injection
+  // Allow alphanumeric, dashes, dots. No spaces or shell characters.
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9.-]*$/.test(newHost)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid hostname format'
     });
   }
 
@@ -1491,6 +1555,7 @@ async function startServer() {
 
     global.audioSessions.set(ssrc, session);
     console.log(`✅ Audio activated for SSRC ${ssrc} (ready to forward packets)`);
+    console.log(`   Current active sessions: ${Array.from(global.audioSessions.keys()).join(', ')}`);
 
     ws.on('message', (message) => {
       const msg = message.toString();
