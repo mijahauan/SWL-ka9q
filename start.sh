@@ -39,67 +39,81 @@ if [ ! -d "node_modules" ]; then
     exit 1
 fi
 
-# Check if hostname is already configured
-if [ -f "$CONFIG_FILE" ]; then
-    SAVED_HOSTNAME=$(cat "$CONFIG_FILE")
-    echo -e "${GREEN}Found saved radiod hostname: ${SAVED_HOSTNAME}${NC}"
-    echo ""
-    read -p "Use this hostname? [Y/n] " -n 1 -r
-    echo ""
-    
-    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-        RADIOD_HOSTNAME="$SAVED_HOSTNAME"
-    fi
-fi
-
-# Prompt for hostname if not set
-if [ -z "$RADIOD_HOSTNAME" ]; then
-    echo -e "${YELLOW}Enter the radiod status stream hostname:${NC}"
-    echo "Examples: bee1-hf-status.local, localhost, 192.168.1.100"
-    echo ""
-    read -p "Hostname: " RADIOD_HOSTNAME
-    
-    # Save for next time
-    if [ ! -z "$RADIOD_HOSTNAME" ]; then
-        echo "$RADIOD_HOSTNAME" > "$CONFIG_FILE"
+# Loop until valid configuration or forced override
+while true; do
+    # Check if hostname is already configured
+    if [ -f "$CONFIG_FILE" ] && [ -z "$RADIOD_HOSTNAME" ]; then
+        SAVED_HOSTNAME=$(cat "$CONFIG_FILE")
+        echo -e "${GREEN}Found saved radiod hostname: ${SAVED_HOSTNAME}${NC}"
         echo ""
-        echo -e "${GREEN}✅ Saved hostname to $CONFIG_FILE${NC}"
+        read -p "Use this hostname? [Y/n] " -n 1 -r
+        echo ""
+        
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            RADIOD_HOSTNAME="$SAVED_HOSTNAME"
+        fi
     fi
-fi
 
-# Validate hostname is set
-if [ -z "$RADIOD_HOSTNAME" ]; then
-    echo -e "${YELLOW}⚠️  No hostname provided, using default: localhost${NC}"
-    RADIOD_HOSTNAME="localhost"
-fi
+    # Prompt for hostname if not set
+    if [ -z "$RADIOD_HOSTNAME" ]; then
+        echo -e "${YELLOW}Enter the radiod status stream hostname:${NC}"
+        echo "Examples: bee1-hf-status.local, localhost, 192.168.1.100"
+        echo ""
+        read -p "Hostname: " RADIOD_HOSTNAME
+        
+        # Save for next time (provisionally)
+        if [ ! -z "$RADIOD_HOSTNAME" ]; then
+            echo "$RADIOD_HOSTNAME" > "$CONFIG_FILE"
+            echo ""
+            echo -e "${GREEN}✅ Saved hostname to $CONFIG_FILE${NC}"
+        fi
+    fi
 
-# Validate hostname format (security check)
-if [[ ! "$RADIOD_HOSTNAME" =~ ^[a-zA-Z0-9.-]+$ ]]; then
-    echo -e "${RED}❌ Error: Invalid hostname format. Use alphanumeric, dots, and dashes only.${NC}"
-    exit 1
-fi
+    # Validate hostname is set
+    if [ -z "$RADIOD_HOSTNAME" ]; then
+        echo -e "${YELLOW}⚠️  No hostname provided, using default: localhost${NC}"
+        RADIOD_HOSTNAME="localhost"
+    fi
 
-echo ""
-echo -e "${BLUE}📻 Starting server with radiod hostname: ${RADIOD_HOSTNAME}${NC}"
-echo ""
+    # Validate hostname format (security check)
+    if [[ ! "$RADIOD_HOSTNAME" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+        echo -e "${RED}❌ Error: Invalid hostname format. Use alphanumeric, dots, and dashes only.${NC}"
+        rm -f "$CONFIG_FILE"
+        RADIOD_HOSTNAME=""
+        continue
+    fi
 
-# Check for schedule updates
-if [ -f "auto-update-schedule.sh" ]; then
-    echo "Checking for schedule updates..."
-    ./auto-update-schedule.sh --quiet
     echo ""
-fi
+    echo -e "${BLUE}📻 Verifying connection to: ${RADIOD_HOSTNAME}${NC}"
 
-# Test connection first (optional)
-if command -v venv/bin/python3 &> /dev/null; then
-    echo "Testing connection to radiod..."
-    if venv/bin/python3 -c "from ka9q import RadiodControl; RadiodControl('${RADIOD_HOSTNAME}')" 2>/dev/null; then
-        echo -e "${GREEN}✅ Connected to radiod${NC}"
+    # Test connection
+    if command -v venv/bin/python3 &> /dev/null; then
+        if venv/bin/python3 -c "from ka9q import RadiodControl; RadiodControl('${RADIOD_HOSTNAME}')" 2>/dev/null; then
+            echo -e "${GREEN}✅ Connected to radiod${NC}"
+            echo ""
+            break # Connection good, proceed
+        else
+            echo -e "${RED}❌ Connection failed: Could not resolve or reach ${RADIOD_HOSTNAME}${NC}"
+            echo ""
+            read -p "Continue anyway? (y/N) " -n 1 -r
+            echo ""
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                 echo -e "${YELLOW}⚠️  Proceeding with unverified connection...${NC}"
+                 echo ""
+                 break # User forced proceed
+            else
+                 echo -e "${YELLOW}↺ Retrying startup configuration...${NC}"
+                 echo ""
+                 rm -f "$CONFIG_FILE"
+                 RADIOD_HOSTNAME=""
+                 # Loop continues
+            fi
+        fi
     else
-        echo -e "${YELLOW}⚠️  Could not verify radiod connection (server will try anyway)${NC}"
+        # No python? Skip check
+        break
     fi
-    echo ""
-fi
+done
 
 # Check if radiod is on a different machine (remote client mode)
 if [ "$RADIOD_HOSTNAME" != "localhost" ] && [ "$RADIOD_HOSTNAME" != "127.0.0.1" ]; then

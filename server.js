@@ -76,6 +76,7 @@ class Ka9qRadioProxy extends EventEmitter {
     this.loggedOrphanRtp = new Set();
     this.discoveredChannels = new Map(); // Map of multicast IP -> channel info
     this.statusMulticastGroups = new Set(); // Track which status groups we've joined
+    this.ssrcToMulticast = new Map(); // Cache SSRC -> {address, port} from status packets
     this.bonjour = null;
     this.browser = null;
 
@@ -179,7 +180,10 @@ class Ka9qRadioProxy extends EventEmitter {
         '239.113.49.249',  // USB channels (receiver 1)
         '239.160.155.125', // USB channels (receiver 2)
         '239.179.238.97',  // USB channels (receiver 3)
-        '239.103.26.231'   // IQ channels
+        '239.103.26.231',  // IQ channels
+        '239.1.2.100',     // AM channels (common)
+        '239.167.23.141',  // AM channels (dynamic)
+        '239.241.146.159'  // IQ channels (from radiod status)
       ];
 
       for (const group of knownGroups) {
@@ -218,6 +222,14 @@ class Ka9qRadioProxy extends EventEmitter {
             console.log(`🔴 DEBUG: Status SSRC 15770000: ${status.multicast_address}:${status.multicast_port}`);
             const stream = this.activeStreams.get(status.ssrc);
             console.log(`🔴 DEBUG: activeStreams has 15770000? ${!!stream}, multicastAddress already set? ${stream?.multicastAddress}`);
+          }
+
+          // Cache SSRC -> multicast mapping for fallback lookup
+          if (status.multicast_address) {
+            this.ssrcToMulticast.set(status.ssrc, {
+              address: status.multicast_address,
+              port: status.multicast_port
+            });
           }
 
           // Log first time we see any SSRC
@@ -400,9 +412,18 @@ class Ka9qRadioProxy extends EventEmitter {
             pcmPayload[i + 1] = tmp;
           }
 
+          // Check backpressure - if buffer is too full, drop packet to prevent latency buildup
+          // 96kB/s stream, so 100kB is ~1s of audio.
+          if (session.ws.bufferedAmount > 100000) {
+            console.warn(`⚠️ WebSocket buffer full for SSRC ${ssrc} (${session.ws.bufferedAmount} bytes), dropping packet`);
+            return;
+          }
+
           // Forward PCM data to browser
-          session.ws.send(pcmPayload);
-          forwardedCounts.set(ssrc, (forwardedCounts.get(ssrc) || 0) + 1);
+          if (session.ws.readyState === 1) { // WebSocket.OPEN
+            session.ws.send(pcmPayload);
+            forwardedCounts.set(ssrc, (forwardedCounts.get(ssrc) || 0) + 1);
+          }
         } catch (err) {
           console.error(`❌ Error processing RTP for SSRC ${ssrc}:`, err.message);
         }
@@ -410,7 +431,7 @@ class Ka9qRadioProxy extends EventEmitter {
     });
   }
 
-  async startAudioStream(frequency) {
+  async startAudioStream(frequency, preset = 'am', gain = 30.0) {
     const freqKHz = frequency / 1000;
     const freqInt = Math.floor(frequency);
 
@@ -430,12 +451,10 @@ class Ka9qRadioProxy extends EventEmitter {
     // New paradigm: no SSRC in request, radiod assigns it
     // We provide RTP destination and search by frequency
     const interfaceArg = MULTICAST_INTERFACE ? `--interface ${MULTICAST_INTERFACE}` : '';
-    const rtpDestArg = `--rtp-destination ${SWL_RTP_DESTINATION}`;
-    const rtpPortArg = `--rtp-port ${SWL_RTP_PORT}`;
     const metricsArg = INCLUDE_KA9Q_METRICS ? '--include-metrics' : '';
     const scriptPath = path.join(__dirname, 'radiod_client.py');
     // Use -u for unbuffered Python output
-    const cmd = `${PYTHON_CMD} -u ${scriptPath} --radiod-host ${RADIOD_HOSTNAME} ${interfaceArg} ${rtpDestArg} ${rtpPortArg} ${metricsArg} get-or-create --frequency ${frequency} --preset am --sample-rate 12000 --agc-enable --gain 30.0`;
+    const cmd = `${PYTHON_CMD} -u ${scriptPath} --radiod-host ${RADIOD_HOSTNAME} ${interfaceArg} ${metricsArg} get-or-create --frequency ${frequency} --preset ${preset} --sample-rate 48000 --agc-enable --gain ${gain}`;
 
     try {
       const { stdout, stderr } = await execAsync(cmd, { timeout: 30000 });
@@ -498,6 +517,36 @@ class Ka9qRadioProxy extends EventEmitter {
         }
       } else {
         console.warn(`⚠️  No multicast address from Python discovery`);
+        // Fallback: poll status cache for up to 10 seconds
+        let cached = this.ssrcToMulticast.get(result.ssrc);
+        if (!cached) {
+          console.log(`   ℹ️  Waiting for status packet with multicast address...`);
+          for (let i = 0; i < 20; i++) { // 20 x 500ms = 10 seconds max
+            await new Promise(resolve => setTimeout(resolve, 500));
+            cached = this.ssrcToMulticast.get(result.ssrc);
+            if (cached) {
+              console.log(`   ✅ Status cache populated after ${(i + 1) * 500}ms`);
+              break;
+            }
+          }
+        }
+
+        if (cached) {
+          console.log(`   ✅ Found in status cache: ${cached.address}:${cached.port}`);
+          stream.multicastAddress = cached.address;
+          stream.multicastPort = cached.port;
+          if (!this.joinedMulticastGroups.has(cached.address)) {
+            try {
+              this.audioSocket.addMembership(cached.address, MULTICAST_INTERFACE || '0.0.0.0');
+              this.joinedMulticastGroups.add(cached.address);
+              console.log(`✅ Joined audio multicast (from cache): ${cached.address}:${cached.port}`);
+            } catch (err) {
+              console.warn(`⚠️  Could not join audio group: ${err.message}`);
+            }
+          }
+        } else {
+          console.error(`❌ SSRC ${result.ssrc} never appeared in status stream after 10s`);
+        }
       }
 
       return stream;

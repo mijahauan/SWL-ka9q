@@ -149,7 +149,7 @@ class AudioSession {
         this.nextPlayTime = 0; // Track scheduled audio time
         this.audioStarted = false; // Track if we've started audio playback
         this.audioBuffer = []; // Buffer to smooth out packet arrival jitter
-        this.minBufferSize = 5; // Wait for 5 packets before starting playback
+        this.minBufferSize = 20; // Wait for 20 packets (approx 400ms) for smoother playback
     }
 
     async start() {
@@ -163,8 +163,10 @@ class AudioSession {
 
         try {
             // Create Web Audio API context
+            // Use a slightly higher latency hint for stability
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
-                sampleRate: 12000
+                sampleRate: 48000,
+                latencyHint: 'playback'
             });
             console.log(`🔊 AudioContext created with state: ${this.audioContext.state}`);
 
@@ -187,7 +189,7 @@ class AudioSession {
                 // Send start command
                 this.ws.send('A:START');
                 this.isPlaying = true;
-                this.nextPlayTime = this.audioContext.currentTime; // Initialize play time
+                this.nextPlayTime = this.audioContext.currentTime + 0.5; // Start with safe delay
             };
 
             this.ws.onmessage = (event) => {
@@ -235,10 +237,12 @@ class AudioSession {
             if (pcmData.length === 0) return;
 
             // Convert to Float32 for Web Audio API
+            // CRITICAL: Use 48000 Hz to match browser's native rate
+            // radiod sends at this rate, browser plays directly
             const audioBuffer = this.audioContext.createBuffer(
                 1, // mono
                 pcmData.length,
-                this.audioContext.sampleRate
+                48000 // Match browser native rate
             );
 
             const channelData = audioBuffer.getChannelData(0);
@@ -250,11 +254,15 @@ class AudioSession {
             this.audioBuffer.push(audioBuffer);
 
             // Start playback once we have enough buffered
-            if (!this.audioStarted && this.audioBuffer.length >= this.minBufferSize) {
-                this.audioStarted = true;
-                const now = this.audioContext.currentTime;
-                this.nextPlayTime = now + 0.1; // Start 100ms in future for initial buffering
-                console.log(`🎵 Starting audio playback with ${this.audioBuffer.length} buffered packets`);
+            if (!this.audioStarted) {
+                if (this.audioBuffer.length >= this.minBufferSize) {
+                    this.audioStarted = true;
+                    // Start scheduling from slightly in the future to ensure first chunk hits
+                    this.nextPlayTime = this.audioContext.currentTime + 0.2;
+                    console.log(`🎵 Starting audio playback with ${this.audioBuffer.length} buffered packets`);
+                } else {
+                    return; // Wait for more data
+                }
             }
 
             // Schedule buffered audio for playback
@@ -266,10 +274,18 @@ class AudioSession {
                     source.connect(this.audioContext.destination);
 
                     const now = this.audioContext.currentTime;
-                    // If we've fallen behind, resync with a small buffer
+                    // If we've fallen behind, resync
                     if (this.nextPlayTime < now) {
-                        this.nextPlayTime = now + 0.05; // 50ms buffer
-                        console.log(`⏩ Audio resync: catching up`);
+                        const gap = now - this.nextPlayTime;
+                        // Only resync if the gap is very significant (> 500ms)
+                        // Small gaps (< 500ms) are normal network jitter - don't resync
+                        if (gap > 0.5) {
+                            if (!this.lastResyncLog || Date.now() - this.lastResyncLog > 5000) {
+                                console.log(`⏩ Audio resync: fell behind by ${gap.toFixed(3)}s, skipping ahead`);
+                                this.lastResyncLog = Date.now();
+                            }
+                            this.nextPlayTime = now + 0.1; // Reset to future
+                        }
                     }
 
                     source.start(this.nextPlayTime);
