@@ -16,6 +16,8 @@
   - Default: System default (works for single-interface systems)
   - To find yours: `ifconfig` (look for your LAN interface's IP)
 
+  > **Note**: If you have multiple `radiod` instances on your network (e.g., status-only nodes vs. SDR nodes), ensure you set `RADIOD_HOSTNAME` to the one with the actual SDR hardware attached. Connecting to a status-only node will result in silent audio (SNR -NaN).
+
 - **`RADIOD_AUDIO_MULTICAST`**: Multicast group address for radiod audio streams
   - **Required for remote clients** (when radiod is on a different machine and multicast discovery doesn't work)
   - Example: `239.103.26.231`
@@ -25,6 +27,7 @@
 ## Network Modes
 
 ### Local Mode (radiod on same machine or LAN segment)
+
 ```bash
 export RADIOD_HOSTNAME=localhost
 # OR
@@ -39,6 +42,7 @@ npm start
 - Lowest latency
 
 ### Remote Mode (radiod across router/network)
+
 ```bash
 export RADIOD_HOSTNAME=bee1-hf-status.local
 export KA9Q_MULTICAST_INTERFACE=192.168.0.161  # Your local interface
@@ -54,11 +58,13 @@ npm start
 ## How to Find Your Radiod's Audio Multicast Address
 
 SSH to your radiod machine and run:
+
 ```bash
 control bee1-hf-status.local
 ```
 
 Look for the "output channel" column. For example:
+
 ```
 15770000        am     12,000    15,770,000  39.6 239.103.26.231:5004
                                                   ^^^^^^^^^^^^^^^^^^
@@ -87,6 +93,7 @@ For a truly generic installation that works anywhere:
    - If discovery finds 0 channels after 3 seconds, asks user for fallback multicast address
 
 2. **Create config file** (recommended for permanent installation)
+
    ```bash
    # ~/.swl-ka9q.conf
    RADIOD_HOSTNAME=bee1-hf-status.local
@@ -102,15 +109,18 @@ For a truly generic installation that works anywhere:
 ## Troubleshooting
 
 ### "Cannot discover multicast address" error
+
 - You're a remote client and need to set `RADIOD_AUDIO_MULTICAST`
 - Find the address using the `control` command (see above)
 
 ### Choppy/intermittent audio
+
 - Radiod might have silence suppression enabled
 - Check radiod configuration for VAD (Voice Activity Detection)
 - Try a different channel with continuous audio (e.g., FT8 frequencies)
 
 ### No audio at all
+
 - Check firewall allows UDP port 5004
 - Verify multicast is enabled on your network switches
 - Check `KA9Q_MULTICAST_INTERFACE` is correct for your active network interface
@@ -118,12 +128,14 @@ For a truly generic installation that works anywhere:
 ## Example Configurations
 
 ### Home LAN (all on same network)
+
 ```bash
 export RADIOD_HOSTNAME=ka9q-sdr.local
 npm start
 ```
 
 ### Multi-homed Mac connecting to remote radiod
+
 ```bash
 export RADIOD_HOSTNAME=remote-sdr.example.com
 export KA9Q_MULTICAST_INTERFACE=192.168.0.100
@@ -132,6 +144,7 @@ npm start
 ```
 
 ### Docker container
+
 ```yaml
 environment:
   - RADIOD_HOSTNAME=host.docker.internal

@@ -25,6 +25,7 @@ export RADIOD_AUDIO_MULTICAST=239.113.49.249
 ```
 
 Common radiod multicast addresses you can try:
+
 - `239.113.49.249` (USB/AM channels - most common)
 - `239.160.155.125` (USB/AM channels - receiver 2)
 - `239.179.238.97` (USB/AM channels - receiver 3)
@@ -48,11 +49,13 @@ This error occurs when the Python ka9q integration cannot create an audio channe
 ### Step 1: Check System Health
 
 Visit the health endpoint:
+
 ```bash
 curl http://localhost:3100/api/audio/health
 ```
 
 Look for the `python.status` field:
+
 - **"ok"** - Python and ka9q package are working
 - **"error"** - There's a problem (check `python.error` for details)
 
@@ -64,6 +67,7 @@ python3 -c "from ka9q import RadiodControl; print('✅ ka9q-python OK')"
 ```
 
 **If you get an error:**
+
 ```bash
 # Install ka9q-python from PyPI (official release)
 pip3 install "ka9q>=2.2,<3"
@@ -82,6 +86,7 @@ ps aux | grep radiod
 ```
 
 **If radiod is not running:**
+
 - Start ka9q-radio according to its documentation
 - Ensure it's configured for your SDR hardware
 - Verify it's listening on the network
@@ -102,16 +107,18 @@ EOF
 **If connection fails:**
 
 1. **Check hostname matches radiod configuration**
-   
+
    Find the hostname in your radiod configuration file (`/etc/radio/radiod.conf`):
+
    ```bash
    grep "^status" /etc/radio/radiod.conf
    # Output example: status = bee1-hf-status.local
    ```
-   
+
    The `status` entry in the `[global]` section is the hostname SWL-ka9q needs.
 
 2. **Test connectivity:**
+
    ```bash
    # Try pinging
    ping bee1-hf-status.local  # Use YOUR radiod status hostname
@@ -121,6 +128,7 @@ EOF
    ```
 
 3. **Configure correct hostname in SWL-ka9q:**
+
    ```bash
    # Set via environment variable
    export RADIOD_HOSTNAME=bee1-hf-status.local  # Match radiod.conf status entry
@@ -128,6 +136,7 @@ EOF
    ```
 
 4. **Check firewall/network:**
+
    ```bash
    # Verify UDP ports are accessible
    sudo netstat -ulnp | grep -E '5004|5006'
@@ -165,6 +174,7 @@ Look at the Node.js server console output when you try to play audio:
 ```
 
 **Look for Python errors:**
+
 - `ModuleNotFoundError: No module named 'ka9q'` → Install ka9q-python
 - `socket.gaierror` or `ConnectionRefusedError` → Check hostname/network
 - `Timeout` → radiod not responding, check if it's running
@@ -172,13 +182,16 @@ Look at the Node.js server console output when you try to play audio:
 ### Audio Issues
 
 #### 1. Audio works on localhost but not on other computers
+
 If you can hear audio when running SWL-ka9q on the same machine as `radiod`, but not on other computers on the LAN:
+
 - **Check TTL**: `radiod` must be configured with a Time-To-Live (TTL) of at least 1 for multicast packets to leave the local interface.
 - **Check Firewall**: Ensure UDP port 5004 (or your configured RTP port) is allowed through the firewall on the `radiod` machine.
 
 ### Issue: "ka9q package not installed"
 
 **Solution:**
+
 ```bash
 pip3 install "ka9q>=2.2,<3"
 # or (if you don't have system pip permissions)
@@ -190,6 +203,7 @@ pip3 install --user "ka9q>=2.2,<3"
 **Solution:** Wrong hostname or radiod not accessible
 
 1. **Find your radiod hostname/IP:**
+
    ```bash
    # If on same machine
    hostname -I
@@ -198,6 +212,7 @@ pip3 install --user "ka9q>=2.2,<3"
    ```
 
 2. **Set the hostname:**
+
    ```bash
    # Temporary
    export RADIOD_HOSTNAME=192.168.1.100
@@ -218,10 +233,19 @@ pip3 install --user "ka9q>=2.2,<3"
 ### Issue: Audio plays but is garbled/silent
 
 **Possible causes:**
+
 1. **SDR not tuned correctly** - Check radiod configuration
 2. **No signal at frequency** - Verify broadcast is actually on-air
 3. **Sample rate mismatch** - Default is 12000 Hz
 4. **Network packet loss** - Check multicast routing
+5. **Connected to wrong radiod instance** - Check if you are connected to a "status-only" radiod
+
+   **Symptom**: Channels are created but show `SNR: -NaN` or `SNR: -inf` in logs.
+
+   **Solution**:
+   - Check if you have multiple radiod instances on the network
+   - Verify which one has the actual SDR hardware attached
+   - Update `RADIOD_HOSTNAME` to point to the correct instance (e.g., `localhost` vs `bee4-status.local`)
 
 ## Testing Without ka9q-radio
 
@@ -237,6 +261,7 @@ The interface will show which stations should be on-air, but audio won't work un
 ## Get More Help
 
 ### Check Server Health
+
 ```bash
 curl http://localhost:3100/api/audio/health | jq
 ```
@@ -244,6 +269,7 @@ curl http://localhost:3100/api/audio/health | jq
 ### Enable Debug Logging
 
 In `server.js`, the Python script errors are logged to console. Check:
+
 ```bash
 npm start
 # Then try to play audio and watch the console
