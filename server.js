@@ -402,20 +402,20 @@ class Ka9qRadioProxy extends EventEmitter {
             return;
           }
 
-          // Extract PCM payload and byte-swap (like ka9q-web does)
-          const pcmPayload = Buffer.from(msg.slice(payloadOffset));
+          // Extract PCM payload and byte-swap (using subarray to avoid copy)
+          const pcmPayload = msg.subarray(payloadOffset);
 
-          // Byte swap for endianness (ka9q-web swaps bytes)
-          for (let i = 0; i < pcmPayload.length; i += 2) {
-            const tmp = pcmPayload[i];
-            pcmPayload[i] = pcmPayload[i + 1];
-            pcmPayload[i + 1] = tmp;
-          }
+          // Byte swap for endianness (optimized using Buffer.swap16)
+          pcmPayload.swap16();
 
           // Check backpressure - if buffer is too full, drop packet to prevent latency buildup
-          // 96kB/s stream, so 100kB is ~1s of audio.
-          if (session.ws.bufferedAmount > 100000) {
-            console.warn(`⚠️ WebSocket buffer full for SSRC ${ssrc} (${session.ws.bufferedAmount} bytes), dropping packet`);
+          // 48kHz 16-bit mono = 96kB/s.
+          // 256kB is ~2.6s of audio.
+          if (session.ws.bufferedAmount > 256000) {
+            if (!session.lastDropWarning || Date.now() - session.lastDropWarning > 5000) {
+              console.warn(`⚠️ WebSocket buffer full for SSRC ${ssrc} (${session.ws.bufferedAmount} bytes), dropping packet (suppressing for 5s)`);
+              session.lastDropWarning = Date.now();
+            }
             return;
           }
 
