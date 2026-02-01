@@ -217,36 +217,36 @@ class Ka9qRadioProxy extends EventEmitter {
       try {
         const status = this.parseStatusMessage(msg);
         if (status && status.ssrc) {
-          // Always log 15770000 for debugging
-          if (status.ssrc === 15770000) {
-            console.log(`🔴 DEBUG: Status SSRC 15770000: ${status.multicast_address}:${status.multicast_port}`);
-            const stream = this.activeStreams.get(status.ssrc);
-            console.log(`🔴 DEBUG: activeStreams has 15770000? ${!!stream}, multicastAddress already set? ${stream?.multicastAddress}`);
+          // Match to active stream using SSRC or frequency
+          const statusSsrc = Number(status.ssrc);
+          const stream = this.activeStreams.get(statusSsrc) ||
+            this.activeStreams.get(String(statusSsrc)) ||
+            Array.from(this.activeStreams.values()).find(s => Math.floor(s.frequency) === statusSsrc);
+
+          if (statusSsrc === 15770000 || (stream && !this.loggedStatus.has(statusSsrc))) {
+            const keys = Array.from(this.activeStreams.keys());
+            console.log(`🔴 DEBUG: Status SSRC ${statusSsrc} -> ${status.multicast_address}:${status.multicast_port} (Match: ${!!stream})`);
+            if (!stream) console.log(`   Active keys: [${keys.map(k => `${k}(${typeof k})`).join(', ')}]`);
           }
 
-          // Cache SSRC -> multicast mapping for fallback lookup
+          // Cache SSRC -> multicast mapping
           if (status.multicast_address) {
-            this.ssrcToMulticast.set(status.ssrc, {
+            this.ssrcToMulticast.set(statusSsrc, {
               address: status.multicast_address,
               port: status.multicast_port
             });
           }
 
-          // Log first time we see any SSRC
-          if (!this.loggedStatus.has(status.ssrc)) {
-            console.log(`📡 Status SSRC ${status.ssrc}: ${status.multicast_address}:${status.multicast_port}`);
-            this.loggedStatus.add(status.ssrc);
-          }
+          if (stream) {
+            if (status.multicast_address && !stream.multicastAddress) {
+              stream.multicastAddress = status.multicast_address;
+              stream.multicastPort = status.multicast_port;
+              console.log(`✅ Matched active stream ${stream.ssrc || statusSsrc} at ${stream.frequency} Hz, joining audio group ${status.multicast_address}:${status.multicast_port}`);
+            }
 
-          const stream = this.activeStreams.get(status.ssrc);
-          if (stream && !stream.multicastAddress) {
-            stream.multicastAddress = status.multicast_address;
-            stream.multicastPort = status.multicast_port;
-
-            console.log(`✅ Matched active stream SSRC ${status.ssrc}, joining audio group ${status.multicast_address}:${status.multicast_port}`);
-
-            // Join multicast group
-            if (!this.joinedMulticastGroups.has(status.multicast_address)) {
+            // JOIN multicast group
+            if (status.multicast_address && !this.joinedMulticastGroups.has(status.multicast_address)) {
+              console.log(`📡 Joining multicast group: ${status.multicast_address}`);
               this.audioSocket.addMembership(status.multicast_address, MULTICAST_INTERFACE || '0.0.0.0');
               this.joinedMulticastGroups.add(status.multicast_address);
             }
@@ -337,12 +337,14 @@ class Ka9qRadioProxy extends EventEmitter {
       const ssrc = msg.readUInt32BE(8);
 
       // Quick check: do we even care about this SSRC?
-      const session = global.audioSessions ? global.audioSessions.get(ssrc) : null;
+      // Use Number for consistent key lookup
+      const session = global.audioSessions ? global.audioSessions.get(Number(ssrc)) : null;
       if (!session) {
         // Log first packet from each unknown SSRC, then ignore
         if (!this.loggedOrphanRtp.has(ssrc)) {
+          const activeKeys = Array.from(global.audioSessions ? global.audioSessions.keys() : []);
           console.warn(`📭 RTP packets arriving for SSRC ${ssrc} but no WebSocket session is active`);
-          console.warn(`   Active sessions: ${Array.from(global.audioSessions ? global.audioSessions.keys() : []).join(', ')}`);
+          console.warn(`   Active session keys (${typeof activeKeys[0] || 'none'}): ${activeKeys.join(', ')}`);
           this.loggedOrphanRtp.add(ssrc);
         }
         return; // Early exit - don't process packets we don't need
@@ -386,6 +388,19 @@ class Ka9qRadioProxy extends EventEmitter {
           const extension = (byte0 >> 4) & 0x01;
           const payloadType = byte1 & 0x7F;
 
+          // Smart Detection:
+          // 96 = Opus (standard for ka9q-radio)
+          // 0, 8, 10, 11 = various PCM formats
+          let isOpus = false;
+          if (payloadType === 96) {
+            isOpus = true;
+          } else if (payloadType === 0 || payloadType === 8 || payloadType === 10 || payloadType === 11) {
+            isOpus = false;
+          } else {
+            // Fallback to requested encoding if PT is unknown
+            isOpus = (session.encoding === 3);
+          }
+
           // Mark first packet as logged
           session.debugLogged = true;
 
@@ -402,26 +417,45 @@ class Ka9qRadioProxy extends EventEmitter {
             return;
           }
 
-          // Extract PCM payload and byte-swap (using subarray to avoid copy)
-          const pcmPayload = msg.subarray(payloadOffset);
+          // TRACING: Log first 5 packets per session for format verification
+          if (!session.packetsAnalyzed || session.packetsAnalyzed < 5) {
+            session.packetsAnalyzed = (session.packetsAnalyzed || 0) + 1;
+            const seq = msg.readUInt16BE(2);
+            const ts = msg.readUInt32BE(4);
+            console.log(`🔊 [Trace] SSRC ${ssrc}: PT=${payloadType}, Seq=${seq}, TS=${ts}, Len=${msg.length}, Offset=${payloadOffset}, isOpus=${isOpus} (Session: ${session.encoding === 3 ? 'Opus' : 'PCM'})`);
+          }
 
-          // Byte swap for endianness (optimized using Buffer.swap16)
-          pcmPayload.swap16();
+          // Extract audio payload
+          const audioPayload = msg.subarray(payloadOffset);
+
+          if (!isOpus) {
+            // Byte swap for endianness (optimized using Buffer.swap16)
+            // Safety: Only swap if length is even to avoid "Buffer size must be a multiple of 16-bits" error
+            if (audioPayload.length % 2 === 0) {
+              audioPayload.swap16();
+            } else if (session.packetsAnalyzed < 10) {
+              console.warn(`⚠️ SSRC ${ssrc}: Odd-length PCM payload (${audioPayload.length} bytes), skipping swap16`);
+            }
+          }
 
           // Check backpressure - if buffer is too full, drop packet to prevent latency buildup
-          // 48kHz 16-bit mono = 96kB/s.
-          // 256kB is ~2.6s of audio.
           if (session.ws.bufferedAmount > 256000) {
             if (!session.lastDropWarning || Date.now() - session.lastDropWarning > 5000) {
-              console.warn(`⚠️ WebSocket buffer full for SSRC ${ssrc} (${session.ws.bufferedAmount} bytes), dropping packet (suppressing for 5s)`);
+              console.warn(`⚠️ WebSocket buffer full for SSRC ${ssrc} (${session.ws.bufferedAmount} bytes), dropping packet`);
               session.lastDropWarning = Date.now();
             }
             return;
           }
 
-          // Forward PCM data to browser
-          if (session.ws.readyState === 1) { // WebSocket.OPEN
-            session.ws.send(pcmPayload);
+          // Forward to browser with encoding prefix: 0x00=PCM, 0x01=Opus
+          // Plus 4-byte RTP timestamp for rate detection and sync
+          if (session.ws.readyState === 1) {
+            const timestamp = msg.readUInt32BE(4);
+            const tagged = Buffer.allocUnsafe(audioPayload.length + 5);
+            tagged[0] = isOpus ? 0x01 : 0x00;
+            tagged.writeUInt32BE(timestamp, 1);
+            audioPayload.copy(tagged, 5);
+            session.ws.send(tagged);
             forwardedCounts.set(ssrc, (forwardedCounts.get(ssrc) || 0) + 1);
           }
         } catch (err) {
@@ -431,7 +465,7 @@ class Ka9qRadioProxy extends EventEmitter {
     });
   }
 
-  async startAudioStream(frequency, preset = 'am', gain = 30.0) {
+  async startAudioStream(frequency, preset = 'am', gain = 30.0, encoding = 0) {
     const freqKHz = frequency / 1000;
     const freqInt = Math.floor(frequency);
 
@@ -449,12 +483,13 @@ class Ka9qRadioProxy extends EventEmitter {
     }
 
     // New paradigm: no SSRC in request, radiod assigns it
-    // We provide RTP destination and search by frequency
     const interfaceArg = MULTICAST_INTERFACE ? `--interface ${MULTICAST_INTERFACE}` : '';
-    const metricsArg = INCLUDE_KA9Q_METRICS ? '--include-metrics' : '';
     const scriptPath = path.join(__dirname, 'radiod_client.py');
+    const encodingArg = `--encoding ${encoding || 0}`;
+    const rateArg = `--sample-rate ${preset === 'am' ? 12000 : 48000}`; // Default to 12k for AM
+
     // Use -u for unbuffered Python output
-    const cmd = `${PYTHON_CMD} -u ${scriptPath} --radiod-host ${RADIOD_HOSTNAME} ${interfaceArg} ${metricsArg} get-or-create --frequency ${frequency} --preset ${preset} --sample-rate 48000 --agc-enable --gain ${gain}`;
+    const cmd = `${PYTHON_CMD} -u ${scriptPath} --radiod-host ${RADIOD_HOSTNAME} ${interfaceArg} get-or-create --frequency ${frequency} --preset ${preset} ${rateArg} --agc-enable --gain ${gain} ${encodingArg}`;
 
     try {
       const { stdout, stderr } = await execAsync(cmd, { timeout: 30000 });
@@ -467,37 +502,27 @@ class Ka9qRadioProxy extends EventEmitter {
 
       if (!result.success) {
         console.error(`❌ Stream request failed: ${result.error}`);
-        if (result.detail) console.error(`   Detail: ${result.detail}`);
         throw new Error(result.error || 'Unknown error from radiod_client');
       }
 
-      const existed = result.existed ? '(reused existing)' : '(created new)';
-      const ssrcInfo = result.ssrc ? `SSRC ${result.ssrc}` : 'SSRC pending';
-      console.log(`✅ Channel ready: ${ssrcInfo} at ${freqKHz} kHz ${existed}`);
-
-      if (result.metrics) {
-        console.log(
-          `📈 ka9q metrics: commands=${result.metrics.commands_sent}, failed=${result.metrics.commands_failed}, status=${result.metrics.status_received}`
-        );
-      }
+      const ssrc = result.ssrc;
+      console.log(`✅ Channel ready: SSRC ${ssrc} at ${freqKHz} kHz`);
 
       if (Math.abs(result.frequency_hz - frequency) > 1) {
         console.warn(`⚠️ Frequency mismatch! Requested ${frequency} Hz but got ${result.frequency_hz} Hz`);
       }
 
-      // Use radiod-assigned SSRC, or frequency as fallback key
-      const streamKey = result.ssrc || Math.floor(frequency);
-
       const stream = {
-        ssrc: result.ssrc,
+        ssrc: ssrc,
         active: true,
         frequency: result.frequency_hz,
         multicastAddress: result.multicast_address,
         multicastPort: result.port,
-        sampleRate: result.sample_rate
+        sampleRate: result.sample_rate || (preset === 'am' ? 12000 : 48000),
+        encoding: encoding // Store requested encoding (0=PCM, 3=Opus)
       };
 
-      this.activeStreams.set(streamKey, stream);
+      this.activeStreams.set(ssrc, stream);
 
       // Cache by frequency to prevent duplicate creation
       this.channelCache.set(freqInt, stream);
@@ -1383,10 +1408,12 @@ app.get('/api/stations/frequency/:freq', (req, res) => {
 app.get('/api/audio/stream/:frequency', async (req, res) => {
   const frequency = parseFloat(req.params.frequency);
 
-  console.log(`🎵 Requesting audio stream for ${frequency / 1000} kHz`);
+  const encoding = parseInt(req.query.encoding) || 0;
+
+  console.log(`🎵 Requesting audio stream for ${frequency / 1000} kHz (encoding: ${encoding})`);
 
   try {
-    const stream = await radioProxy.startAudioStream(frequency);
+    const stream = await radioProxy.startAudioStream(frequency, 'am', 30.0, encoding);
 
     // Use SSRC if available, otherwise use frequency as the stream identifier
     const streamId = stream.ssrc || Math.floor(frequency);
@@ -1397,7 +1424,8 @@ app.get('/api/audio/stream/:frequency', async (req, res) => {
       streamId: streamId,  // Always valid identifier for WebSocket
       frequency: stream.frequency,
       websocket: `ws://${req.headers.host}/api/audio/ws/${streamId}`,
-      multicast: `${stream.multicastAddress}:${stream.multicastPort}`
+      multicast: `${stream.multicastAddress}:${stream.multicastPort}`,
+      sampleRate: stream.sampleRate || 48000
     });
   } catch (error) {
     console.error('❌ Failed to create audio stream:', error);
@@ -1596,14 +1624,21 @@ async function startServer() {
       }
     }
 
+    // Find the stream to get its encoding
+    const stream = radioProxy.activeStreams.get(ssrc) ||
+      radioProxy.activeStreams.get(String(ssrc)) ||
+      radioProxy.activeStreams.get(Number(ssrc));
+
+    const sessionKey = Number(ssrc);
     const session = {
       ws,
-      ssrc,
-      audio_active: true  // Start active immediately - browser sends START message quickly
+      ssrc: sessionKey,
+      audio_active: true, // Start active immediately - browser sends START message quickly
+      encoding: stream ? stream.encoding : 0 // Default to PCM if unknown
     };
 
-    global.audioSessions.set(ssrc, session);
-    console.log(`✅ Audio activated for SSRC ${ssrc} (ready to forward packets)`);
+    global.audioSessions.set(sessionKey, session);
+    console.log(`✅ Audio activated for SSRC ${sessionKey} (ready to forward packets)`);
     console.log(`   Current active sessions: ${Array.from(global.audioSessions.keys()).join(', ')}`);
 
     ws.on('message', (message) => {

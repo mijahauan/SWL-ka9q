@@ -11,6 +11,7 @@ let currentTargetFilter = null;
 let currentLanguageFilter = null;
 let currentView = 'time'; // 'time' or 'frequency'
 let displayMode = 'table'; // 'table' or 'cards'
+let lowBandwidthMode = false;
 
 // Target region code mappings for tooltips
 const TARGET_REGIONS = {
@@ -150,6 +151,8 @@ class AudioSession {
         this.audioStarted = false; // Track if we've started audio playback
         this.audioBuffer = []; // Buffer to smooth out packet arrival jitter
         this.minBufferSize = 20; // Wait for 20 packets (approx 400ms) for smoother playback
+        this.opusDecoder = null;
+        this.decodedOpusBuffer = []; // Temporary buffer for decoded Opus chunks
     }
 
     async start() {
@@ -190,15 +193,39 @@ class AudioSession {
                 this.ws.send('A:START');
                 this.isPlaying = true;
                 this.nextPlayTime = this.audioContext.currentTime + 0.5; // Start with safe delay
+                console.log(`📡 Audio Protocol: v3.5.1-RATE-SYNC (Header+Rate)`);
             };
 
             this.ws.onmessage = (event) => {
                 if (event.data instanceof ArrayBuffer) {
-                    packetCount++;
-                    if (packetCount === 1 || packetCount % 100 === 0) {
-                        console.log(`📦 Received ${packetCount} PCM packets for ${this.frequency / 1000} kHz`);
+                    const totalBytes = event.data.byteLength;
+                    let encoding;
+                    let payload;
+                    let timestamp = 0;
+
+                    const view = new DataView(event.data);
+
+                    // NEW: Server sends [encoding(1 byte), timestamp(4 bytes), payload]
+                    if (totalBytes >= 5 && (view.getUint8(0) === 0x00 || view.getUint8(0) === 0x01)) {
+                        encoding = view.getUint8(0);
+                        timestamp = view.getUint32(1); // Read 4-byte BE timestamp robustly
+                        payload = event.data.slice(5);
+                    } else if (totalBytes % 2 === 1) {
+                        // Old style 1-byte encoding tag
+                        encoding = view.getUint8(0);
+                        payload = event.data.slice(1);
+                    } else {
+                        // Raw PCM
+                        encoding = 0x00;
+                        payload = event.data;
                     }
-                    this.handlePcmPacket(event.data);
+
+                    packetCount++;
+                    if (encoding === 0x01) {
+                        this.handleOpusPacket(payload);
+                    } else {
+                        this.handlePcmPacket(payload, timestamp);
+                    }
                 } else {
                     console.warn(`⚠️ Received non-ArrayBuffer data:`, typeof event.data, event.data);
                 }
@@ -229,20 +256,114 @@ class AudioSession {
         }
     }
 
-    handlePcmPacket(data) {
+    async initOpusDecoder() {
+        if (this.opusDecoder) return;
+
+        if (!window.AudioDecoder) {
+            console.error('❌ Browser does not support AudioDecoder (WebCodecs)');
+            return;
+        }
+
+        console.log('🎙️ Initializing native Opus decoder (WebCodecs)');
+        this.opusDecoder = new AudioDecoder({
+            output: (audioData) => {
+                // Copy samples from AudioData to an AudioBuffer
+                const buffer = this.audioContext.createBuffer(
+                    audioData.numberOfChannels,
+                    audioData.numberOfFrames,
+                    audioData.sampleRate
+                );
+
+                // Throttle debug logging to once per second
+                if (!this._lastSampleLog || Date.now() - this._lastSampleLog > 1000) {
+                    console.log(`🔊 Decoded: ${audioData.numberOfFrames} frames at ${audioData.sampleRate} Hz (${audioData.numberOfChannels} channels)`);
+                    this._lastSampleLog = Date.now();
+                }
+
+                for (let i = 0; i < audioData.numberOfChannels; i++) {
+                    audioData.copyTo(buffer.getChannelData(i), { planeIndex: i });
+                }
+
+                this.audioBuffer.push(buffer);
+                this.maybeStartPlayback();
+                audioData.close(); // Important: free resources
+            },
+            error: (e) => console.error('❌ AudioDecoder error:', e)
+        });
+
+        this.opusDecoder.configure({
+            codec: 'opus',
+            sampleRate: 48000,
+            numberOfChannels: 1
+        });
+    }
+
+    async handleOpusPacket(data) {
+        if (!this.opusDecoder) {
+            await this.initOpusDecoder();
+        }
+
+        // Note: For Opus, WebCodecs handles the native rate internally.
+        // The decoder will output 48kHz buffers mostly, regardless of input.
+
+        if (this.opusDecoder && this.opusDecoder.state === 'configured') {
+            try {
+                this.opusDecoder.decode(new EncodedAudioChunk({
+                    type: 'key', // Opus frames are self-contained
+                    timestamp: 0, // We handle timing via nextPlayTime
+                    data: data
+                }));
+            } catch (err) {
+                console.error('❌ Decoding error:', err);
+            }
+        }
+    }
+
+    maybeStartPlayback() {
+        // Start playback once we have enough buffered
+        if (!this.audioStarted) {
+            if (this.audioBuffer.length >= this.minBufferSize) {
+                this.audioStarted = true;
+                // Start scheduling from slightly in the future to ensure first chunk hits
+                this.nextPlayTime = this.audioContext.currentTime + 0.2;
+                console.log(`🎵 Starting audio playback with ${this.audioBuffer.length} buffered packets`);
+            } else {
+                return; // Wait for more data
+            }
+        }
+
+        this.schedulePlayback();
+    }
+
+    handlePcmPacket(data, timestamp = 0) {
         try {
             // Server sends decoded PCM as 16-bit signed integers
             const pcmData = new Int16Array(data);
 
             if (pcmData.length === 0) return;
 
+            // HEURISTIC: Detect sample rate from packet size as fallback
+            // But prefer the hardwareRate provided during session creation
+            let nativeRate = this.hardwareRate || 48000;
+
+            // If hardwareRate is 48k (default) but packet is small, it's likely 12k/24k
+            if (nativeRate === 48000) {
+                if (pcmData.length < 350) nativeRate = 12000;
+                else if (pcmData.length < 710) nativeRate = 24000;
+            }
+
+            // Diagnostic log if rate changes
+            if (this.lastDetectedRate !== nativeRate) {
+                console.log(`📡 Detected native PCM rate: ${nativeRate} Hz (Packet size: ${pcmData.length} samples)`);
+                this.lastDetectedRate = nativeRate;
+            }
+
             // Convert to Float32 for Web Audio API
-            // CRITICAL: Use 48000 Hz to match browser's native rate
-            // radiod sends at this rate, browser plays directly
+            // Use nativeRate to ensure correct playback speed; browser will resample to 48kHz
             const audioBuffer = this.audioContext.createBuffer(
                 1, // mono
                 pcmData.length,
-                48000 // Match browser native rate
+                nativeRate
             );
 
             const channelData = audioBuffer.getChannelData(0);
@@ -253,47 +374,43 @@ class AudioSession {
             // Add to buffer for jitter smoothing
             this.audioBuffer.push(audioBuffer);
 
-            // Start playback once we have enough buffered
-            if (!this.audioStarted) {
-                if (this.audioBuffer.length >= this.minBufferSize) {
-                    this.audioStarted = true;
-                    // Start scheduling from slightly in the future to ensure first chunk hits
-                    this.nextPlayTime = this.audioContext.currentTime + 0.2;
-                    console.log(`🎵 Starting audio playback with ${this.audioBuffer.length} buffered packets`);
-                } else {
-                    return; // Wait for more data
-                }
-            }
+            this.maybeStartPlayback();
+        } catch (error) {
+            console.error('Error processing PCM packet:', error);
+        }
+    }
 
-            // Schedule buffered audio for playback
-            if (this.audioStarted && this.isPlaying) {
-                while (this.audioBuffer.length > 0) {
-                    const buffer = this.audioBuffer.shift();
-                    const source = this.audioContext.createBufferSource();
-                    source.buffer = buffer;
-                    source.connect(this.audioContext.destination);
+    schedulePlayback() {
+        // Schedule buffered audio for playback
+        if (this.audioStarted && this.isPlaying) {
+            while (this.audioBuffer.length > 0) {
+                const buffer = this.audioBuffer.shift();
+                const source = this.audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.connect(this.audioContext.destination);
 
-                    const now = this.audioContext.currentTime;
-                    // If we've fallen behind, resync
-                    if (this.nextPlayTime < now) {
-                        const gap = now - this.nextPlayTime;
-                        // Only resync if the gap is very significant (> 500ms)
-                        // Small gaps (< 500ms) are normal network jitter - don't resync
-                        if (gap > 0.5) {
-                            if (!this.lastResyncLog || Date.now() - this.lastResyncLog > 5000) {
-                                console.log(`⏩ Audio resync: fell behind by ${gap.toFixed(3)}s, skipping ahead`);
-                                this.lastResyncLog = Date.now();
-                            }
-                            this.nextPlayTime = now + 0.1; // Reset to future
+                const now = this.audioContext.currentTime;
+
+                // CRITICAL: Ensure we never schedule in the past. 
+                // If we are behind, multiple buffers will play at once (now), causing static/distortion.
+                if (this.nextPlayTime < now) {
+                    const gap = now - this.nextPlayTime;
+
+                    // Log significant gaps (> 1.0s) for diagnostics
+                    if (gap > 1.0) {
+                        if (!this.lastResyncLog || Date.now() - this.lastResyncLog > 5000) {
+                            console.log(`⏩ Audio resync: fell behind by ${gap.toFixed(3)}s, resetting playhead`);
+                            this.lastResyncLog = Date.now();
                         }
                     }
 
-                    source.start(this.nextPlayTime);
-                    this.nextPlayTime += buffer.duration;
+                    // Reset to now + small cushion (100ms) to stop the overlap
+                    this.nextPlayTime = now + 0.1;
                 }
+
+                source.start(this.nextPlayTime);
+                this.nextPlayTime += buffer.duration;
             }
-        } catch (error) {
-            console.error('Error processing PCM packet:', error);
         }
     }
 
@@ -813,7 +930,10 @@ function createStationCard(station) {
                 >
                     ${isListening ? '⏹️ Stop Listening' : '▶️ Listen Live'}
                 </button>
-                ${isListening ? `<button class="btn-tune" onclick="openTuningPanel(${station.frequency}, ${JSON.stringify(station).replace(/"/g, '&quot;')})">🎛️ Tune</button>` : ''}
+                ${isListening ? (() => {
+            const session = activeAudioSessions.get(station.frequency);
+            return `<button class="btn-tune" onclick="openTuningPanel('${session.ssrc}', ${JSON.stringify(station).replace(/"/g, '&quot;')})">🎛️ Tune</button>`;
+        })() : ''}
             </div>
         </div>
     `;
@@ -872,7 +992,10 @@ function createStationRow(station) {
                     >
                         ${isListening ? '⏹️ Stop' : '▶️ Play'}
                     </button>
-                    ${isListening ? `<button class="table-btn tune" onclick="openTuningPanel(${station.frequency}, ${JSON.stringify(station).replace(/"/g, '&quot;')})">🎛️</button>` : ''}
+                    ${isListening ? (() => {
+            const session = activeAudioSessions.get(station.frequency);
+            return `<button class="table-btn tune" onclick="openTuningPanel('${session.ssrc}', ${JSON.stringify(station).replace(/"/g, '&quot;')})">🎛️</button>`;
+        })() : ''}
                 </div>
             </td>
         </tr>
@@ -948,7 +1071,10 @@ function createFrequencyRow(freq) {
                     >
                         ${isListening ? '⏹️ Stop' : '▶️ Play'}
                     </button>
-                    ${isListening ? `<button class="table-btn tune" onclick="openTuningPanel(${freq.frequency}, ${JSON.stringify(freq).replace(/"/g, '&quot;')})">🎛️</button>` : ''}
+                    ${isListening ? (() => {
+            const session = activeAudioSessions.get(freq.frequency);
+            return `<button class="table-btn tune" onclick="openTuningPanel('${session.ssrc}', ${JSON.stringify(freq).replace(/"/g, '&quot;')})">🎛️</button>`;
+        })() : ''}
                 </div>
             </td>
         </tr>
@@ -977,8 +1103,11 @@ async function toggleAudio(frequency) {
     } else {
         // Start audio
         try {
-            console.log(`▶️ Starting audio for ${frequency / 1000} kHz (${frequency} Hz)`);
-            const response = await fetch(`/api/audio/stream/${frequency}`);
+            console.log(`▶️ Starting audio for ${frequency / 1000} kHz (${frequency} Hz) ${lowBandwidthMode ? '(Opus)' : '(PCM)'}`);
+
+            // Add encoding parameter if low bandwidth mode is on (3 = Opus)
+            const encoding = lowBandwidthMode ? 3 : 0;
+            const response = await fetch(`/api/audio/stream/${frequency}?encoding=${encoding}`);
             if (!response.ok) throw new Error('Failed to start audio stream');
 
             const data = await response.json();
@@ -988,8 +1117,9 @@ async function toggleAudio(frequency) {
                 throw new Error(data.details || 'Failed to start audio stream');
             }
 
-            console.log(`🎧 Creating audio session: SSRC=${data.ssrc}, WS=${data.websocket}`);
+            console.log(`🎧 Creating audio session: SSRC=${data.ssrc}, WS=${data.websocket}, Rate=${data.sampleRate || 48000} Hz`);
             const session = new AudioSession(frequency, data.ssrc, data.websocket);
+            session.hardwareRate = data.sampleRate || 48000;
             const started = await session.start();
 
             if (started) {
@@ -1167,6 +1297,92 @@ function showError(message) {
 // ====================
 // Tuning Panel Functions
 // ====================
+
+/**
+ * Toggle Low Bandwidth (Opus) mode
+ */
+function toggleLowBandwidth(enabled) {
+    if (enabled && !window.AudioDecoder) {
+        console.error('❌ Cannot enable Low Bandwidth mode: AudioDecoder (WebCodecs) is not supported by this browser.');
+        const toggle = document.getElementById('low-bandwidth-toggle');
+        if (toggle) toggle.checked = false;
+        lowBandwidthMode = false;
+        return;
+    }
+    lowBandwidthMode = enabled;
+    const modeText = enabled ? 'ENABLED (Opus)' : 'DISABLED (PCM)';
+    console.log(`📡 Setting audio transport: ${modeText}`);
+
+    // Save to localStorage
+    localStorage.setItem('lowBandwidthMode', enabled);
+
+    // Notify user that it only applies to NEW streams
+    if (activeAudioSessions.size > 0) {
+        console.info('ℹ️ Low Bandwidth setting will apply to next station you tune.');
+    }
+}
+
+// Initialization: Load saved low bandwidth preference
+(function initLowBandwidth() {
+    const saved = localStorage.getItem('lowBandwidthMode');
+
+    // Check for AudioDecoder support (WebCodecs)
+    const hasDecoder = !!window.AudioDecoder;
+    const isSecure = window.isSecureContext;
+
+    if (!hasDecoder) {
+        console.warn(`⚠️ Opus disabled: hasDecoder=false, isSecure=${isSecure}`);
+
+        const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
+        let hint = isFirefox
+            ? "Firefox requires 'dom.media.webcodecs.enabled' in about:config"
+            : "This browser doesn't support WebCodecs (AudioDecoder)";
+
+        if (!isSecure && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+            hint += " - Also usually requires HTTPS";
+        }
+
+        setTimeout(() => {
+            const toggle = document.getElementById('low-bandwidth-toggle');
+            if (toggle) {
+                toggle.disabled = true;
+                const parent = toggle.closest('.stat-item');
+                if (parent) {
+                    parent.title = hint;
+                    parent.style.opacity = "0.5";
+                    parent.style.cursor = "help";
+                }
+            }
+        }, 1000);
+        lowBandwidthMode = false;
+        return;
+    }
+
+    // If we have a decoder but insecure context, just show a warning tooltip
+    if (!isSecure && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        setTimeout(() => {
+            const parent = document.getElementById('low-bandwidth-toggle')?.closest('.stat-item');
+            if (parent) {
+                parent.title = "⚠️ Insecure context (HTTP). Opus may fail depending on browser security flags.";
+            }
+        }, 1000);
+    }
+
+    if (saved !== null) {
+        lowBandwidthMode = saved === 'true';
+    } else {
+        // DEFAULT TO OPUS (true) if supported and secure or localhost
+        lowBandwidthMode = !!(hasDecoder && (isSecure || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'));
+        if (lowBandwidthMode) {
+            console.log('🎙️ Defaulting to Opus transport (Low Bandwidth)');
+        }
+    }
+
+    setTimeout(() => {
+        const toggle = document.getElementById('low-bandwidth-toggle');
+        if (toggle) toggle.checked = lowBandwidthMode;
+    }, 500);
+})();
 
 let currentTuningSSRC = null;
 let currentTuningStation = null;

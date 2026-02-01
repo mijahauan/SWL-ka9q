@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.5.1] - 2026-02-01
+
+### Fixed - Audio Synchronization & Transport
+
+**Critical Fix**: Resolved persistent audio static, popping, and "Resyncing" errors by refactoring the transport layer to trust hardware-managed SSRCs and sample rates.
+
+- ✅ **Hardware-Managed SSRCs**: Refactored `radiod_client.py` and `server.js` to let `ka9q-python` and the radio hardware manage SSRCs and RTP streams. The app now requests objective parameters (frequency, rate, encoding) and consumes hardware-assigned identifiers.
+- ✅ **Precision Sample Rate Sync**: Synchronized the entire pipeline to respect hardware-native sample rates (e.g., 12,000 Hz for AM). This eliminates the "chipmunk" sound and subsequent clock drift.
+- ✅ **Anti-Overlap Scheduling**: Updated the frontend (`app.js`) to strictly enforce sequential buffer playback. This prevents multiple audio packets from playing at once, which was the primary source of loud static and pops.
+- ✅ **Opus Transport Improvements**: Optimized the Opus decoding path to handle 48kHz output independently of the source rate and refined jitter buffer management.
+- ✅ **Python Stability**: Fixed a `NameError: name 'logging' is not defined` in `radiod_client.py` that caused intermittent crashes during channel discovery.
+
+### Changed - WebSocket Protocol v3.5.1
+
+- 🚀 **5-Byte Header**: Updated the real-time audio protocol to include an encoding tag and a 4-byte RTP timestamp, allowing high-precision clock alignment in the browser.
+
 ## [Unreleased] - 2026-01-19
 
 ### Changed - Legacy Code Cleanup
@@ -12,6 +28,12 @@ All notable changes to this project will be documented in this file.
 - ✅ **API Cleanup**: Removed deprecated `ssrc` argument from `get_or_create_channel` and CLI tools. `radiod` now exclusively handles SSRC assignment.
 - ✅ **Cache Removal**: Removed ineffective one-shot channel cache logic.
 - ✅ **Standardization**: Enforced consistent use of `ensure_channel` for channel creation and validation.
+
+### Security & Setup Improvements
+
+- 🔒 **RCE Prevention**: Implemented Base64 encoding for Python script execution in `server.js` to prevent shell injection vulnerabilities.
+- 🔒 **Input Validation**: Added strict validation for radiod method names and parameters.
+- 🛠️ **Smart Network Detection**: Updated `start.sh` to automatically detect the network interface with the default route, fixing multicast issues on multi-interface systems.
 
 ## [Unreleased] - 2025-12-11
 
