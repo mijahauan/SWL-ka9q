@@ -1103,10 +1103,12 @@ async function toggleAudio(frequency) {
     } else {
         // Start audio
         try {
-            console.log(`▶️ Starting audio for ${frequency / 1000} kHz (${frequency} Hz) ${lowBandwidthMode ? '(Opus)' : '(PCM)'}`);
+            // Check if Opus decoder is supported (requires HTTPS or localhost in many browsers)
+            const supportsOpus = !!window.AudioDecoder;
+            const encoding = supportsOpus ? 3 : 0;
+            
+            console.log(`▶️ Starting audio for ${frequency / 1000} kHz (${frequency} Hz) (${supportsOpus ? 'Opus' : 'PCM'})`);
 
-            // Add encoding parameter if low bandwidth mode is on (3 = Opus)
-            const encoding = lowBandwidthMode ? 3 : 0;
             const response = await fetch(`/api/audio/stream/${frequency}?encoding=${encoding}`);
             if (!response.ok) throw new Error('Failed to start audio stream');
 

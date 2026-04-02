@@ -39,6 +39,18 @@ if [ ! -d "node_modules" ]; then
     exit 1
 fi
 
+# Auto-generate self-signed certificate for HTTPS if not present
+if [ ! -f "key.pem" ] || [ ! -f "cert.pem" ]; then
+    echo -e "${BLUE}🔒 Generating self-signed SSL certificate for HTTPS...${NC}"
+    openssl req -nodes -new -x509 -keyout key.pem -out cert.pem -days 3650 -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost" 2>/dev/null
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ Certificate generated successfully!${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Failed to generate certificate. Server will run in HTTP-only mode.${NC}"
+    fi
+    echo ""
+fi
+
 # Loop until valid configuration or forced override
 while true; do
     # Check if hostname is already configured
@@ -206,10 +218,18 @@ fi
 # Detect the physical network interface IP (ignore ZeroTier/VPN interfaces)
 if [ -z "$KA9Q_MULTICAST_INTERFACE" ]; then
     # Get the interface that has the default route
-    DEFAULT_IFACE=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'dev \K\S+' | head -1)
+    if command -v ip >/dev/null 2>&1; then
+        DEFAULT_IFACE=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'dev \K\S+' | head -1)
+    else
+        DEFAULT_IFACE=$(route -n get default 2>/dev/null | grep interface | awk '{print $2}')
+    fi
     
     if [ ! -z "$DEFAULT_IFACE" ]; then
-        PHYSICAL_IP=$(ip addr show "$DEFAULT_IFACE" 2>/dev/null | grep -oP 'inet \K[\d.]+' | head -1)
+        if command -v ip >/dev/null 2>&1; then
+            PHYSICAL_IP=$(ip addr show "$DEFAULT_IFACE" 2>/dev/null | grep -oP 'inet \K[\d.]+' | head -1)
+        else
+            PHYSICAL_IP=$(ifconfig "$DEFAULT_IFACE" 2>/dev/null | awk '$1 == "inet" {print $2}' | grep -E -o '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1)
+        fi
         if [ ! -z "$PHYSICAL_IP" ]; then
             KA9Q_MULTICAST_INTERFACE="$PHYSICAL_IP"
             echo -e "${GREEN}📡 Using network interface: ${PHYSICAL_IP} (${DEFAULT_IFACE})${NC}"

@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.6.0] - 2026-04-02
+
+### Added - Network Transport & HTTPS Support
+
+- 🚀 **Opus Transport by Default**: Upgraded the standard web audio streaming protocol from uncompressed PCM to Opus (encoding=3), drastically reducing network bandwidth utilization for all active audio sessions.
+- 🔒 **Auto-HTTPS Provisioning**: Added an automated generation process allowing `node server.js` to serve content securely automatically with a self-signed certificate, ensuring browser compatibility to enable high-performance `AudioDecoder` (WebCodecs) APIs required for Opus decoding.
+- 🍎 **macOS Installation Fixes**: Fixed network IP discovery commands in `install.sh` and `start.sh` to gracefully fallback from Linux `ip` tooling to BSD-compliant `ifconfig` and `route`, eliminating syntax crash loops on macOS platforms.
+- ⚠️ **Graceful Audio Fallback**: Added dynamic detection of the WebCodecs API missing fallback gracefully to PCM audio (encoding=0) on legacy platforms or HTTP connections where Native Opus pipelines aren't supported.
+
 ## [3.5.1] - 2026-02-01
 
 ### Fixed - Audio Synchronization & Transport

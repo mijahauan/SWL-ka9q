@@ -157,10 +157,18 @@ echo -e "${BLUE}[5/7] Checking network configuration...${NC}"
 
 # Detect network interfaces
 echo "  Detecting network interfaces..."
-INTERFACES=$(ip -o link show | awk -F': ' '{print $2}' | grep -v "lo")
+if command -v ip >/dev/null 2>&1; then
+    INTERFACES=$(ip -o link show | awk -F': ' '{print $2}' | grep -v "lo")
+else
+    INTERFACES=$(ifconfig -l 2>/dev/null | tr ' ' '\n' | grep -v "lo0")
+fi
 echo "  Available interfaces:"
 for iface in $INTERFACES; do
-    IP=$(ip -4 addr show "$iface" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
+    if command -v ip >/dev/null 2>&1; then
+        IP=$(ip -4 addr show "$iface" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
+    else
+        IP=$(ifconfig "$iface" 2>/dev/null | awk '$1 == "inet" {print $2}' | grep -E -o '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1)
+    fi
     if [ ! -z "$IP" ]; then
         echo -e "    - ${GREEN}$iface${NC}: $IP"
     fi

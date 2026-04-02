@@ -25,6 +25,7 @@ bc-freq.backup.*.txt
 .env.*.local
 .radiod-hostname
 .radiod-multicast
+*.pem
 
 # Logs
 logs/

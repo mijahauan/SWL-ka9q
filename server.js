@@ -465,7 +465,7 @@ class Ka9qRadioProxy extends EventEmitter {
     });
   }
 
-  async startAudioStream(frequency, preset = 'am', gain = 30.0, encoding = 0) {
+  async startAudioStream(frequency, preset = 'am', gain = 30.0, encoding = 3) {
     const freqKHz = frequency / 1000;
     const freqInt = Math.floor(frequency);
 
@@ -485,7 +485,7 @@ class Ka9qRadioProxy extends EventEmitter {
     // New paradigm: no SSRC in request, radiod assigns it
     const interfaceArg = MULTICAST_INTERFACE ? `--interface ${MULTICAST_INTERFACE}` : '';
     const scriptPath = path.join(__dirname, 'radiod_client.py');
-    const encodingArg = `--encoding ${encoding || 0}`;
+    const encodingArg = `--encoding ${encoding}`;
     const rateArg = `--sample-rate ${preset === 'am' ? 12000 : 48000}`; // Default to 12k for AM
 
     // Use -u for unbuffered Python output
@@ -1408,7 +1408,8 @@ app.get('/api/stations/frequency/:freq', (req, res) => {
 app.get('/api/audio/stream/:frequency', async (req, res) => {
   const frequency = parseFloat(req.params.frequency);
 
-  const encoding = parseInt(req.query.encoding) || 0;
+  const parsedEncoding = parseInt(req.query.encoding);
+  const encoding = isNaN(parsedEncoding) ? 3 : parsedEncoding;
 
   console.log(`🎵 Requesting audio stream for ${frequency / 1000} kHz (encoding: ${encoding})`);
 
@@ -1423,7 +1424,7 @@ app.get('/api/audio/stream/:frequency', async (req, res) => {
       ssrc: stream.ssrc,
       streamId: streamId,  // Always valid identifier for WebSocket
       frequency: stream.frequency,
-      websocket: `ws://${req.headers.host}/api/audio/ws/${streamId}`,
+      websocket: `${req.protocol === 'https' ? 'wss' : 'ws'}://${req.headers.host}/api/audio/ws/${streamId}`,
       multicast: `${stream.multicastAddress}:${stream.multicastPort}`,
       sampleRate: stream.sampleRate || 48000
     });
@@ -1573,13 +1574,32 @@ app.post('/api/reload', async (req, res) => {
 async function startServer() {
   await loadSchedules();
 
-  const server = app.listen(PORT, () => {
-    console.log(`🚀 Broadcast Station Monitor running on http://localhost:${PORT}/`);
-    console.log(`📡 Monitoring ${stations.length} broadcast schedules`);
-    console.log(`🎵 WebSocket audio streaming enabled`);
-    console.log(`🐍 Using Python: ${PYTHON_CMD}`);
-    console.log(`📻 Radiod hostname: ${RADIOD_HOSTNAME}`);
-  });
+  let server;
+  if (fs.existsSync('key.pem') && fs.existsSync('cert.pem')) {
+    const options = {
+      key: fs.readFileSync('key.pem'),
+      cert: fs.readFileSync('cert.pem')
+    };
+    server = https.createServer(options, app);
+    server.listen(PORT, () => {
+      console.log(`🚀 Broadcast Station Monitor running on https://localhost:${PORT}/ (HTTPS)`);
+      console.log(`🔌 Note: You may need to accept the self-signed certificate warning in your browser!`);
+      console.log(`📡 Monitoring ${stations.length} broadcast schedules`);
+      console.log(`🎵 WebSocket audio streaming enabled`);
+      console.log(`🐍 Using Python: ${PYTHON_CMD}`);
+      console.log(`📻 Radiod hostname: ${RADIOD_HOSTNAME}`);
+    });
+  } else {
+    const http = await import('http');
+    server = http.createServer(app);
+    server.listen(PORT, () => {
+      console.log(`🚀 Broadcast Station Monitor running on http://localhost:${PORT}/ (HTTP)`);
+      console.log(`📡 Monitoring ${stations.length} broadcast schedules`);
+      console.log(`🎵 WebSocket audio streaming enabled`);
+      console.log(`🐍 Using Python: ${PYTHON_CMD}`);
+      console.log(`📻 Radiod hostname: ${RADIOD_HOSTNAME}`);
+    });
+  }
 
   // WebSocket server for audio streaming
   const wss = new WebSocketServer({ noServer: true });
@@ -1634,7 +1654,7 @@ async function startServer() {
       ws,
       ssrc: sessionKey,
       audio_active: true, // Start active immediately - browser sends START message quickly
-      encoding: stream ? stream.encoding : 0 // Default to PCM if unknown
+      encoding: stream ? stream.encoding : 3 // Default to Opus if unknown
     };
 
     global.audioSessions.set(sessionKey, session);

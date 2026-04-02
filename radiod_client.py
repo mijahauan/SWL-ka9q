@@ -124,7 +124,7 @@ def main():
     get_create_parser.add_argument('--sample-rate', type=int, default=DEFAULT_SAMPLE_RATE)
     get_create_parser.add_argument('--gain', type=float, default=30.0)
     get_create_parser.add_argument('--agc-enable', action='store_true', help='Enable AGC')
-    get_create_parser.add_argument('--encoding', type=int, default=0, help='Output encoding (0=PCM, 3=Opus)')
+    get_create_parser.add_argument('--encoding', type=int, default=3, help='Output encoding (0=PCM, 3=Opus)')
     
     # Remove command
     remove_parser = subparsers.add_parser('remove', help='Remove a channel')
