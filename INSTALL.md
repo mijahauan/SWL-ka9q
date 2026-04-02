@@ -97,7 +97,10 @@ On first run, you'll be prompted for your radiod hostname:
 
 ### 5. Open in Browser
 
-Navigate to: **http://localhost:3100**
+Navigate to: **https://localhost:3100** (or your server's IP)
+
+> [!NOTE]
+> The server automatically uses HTTPS by generating a self-signed certificate on startup (`cert.pem`, `key.pem`). This is **required** by modern browsers to enable the high-performance Opus audio pipelines (WebCodecs API). You will need to accept the security warning in your browser on the first visit.
 
 ---
 

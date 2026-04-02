@@ -12,15 +12,15 @@ get_current_season() {
     # A-season: March-September (Spring/Summer)
     # B-season: October-February (Fall/Winter)
     if [ "$MONTH" -ge 3 ] && [ "$MONTH" -lt 10 ]; then
-        echo "sked-a${YEAR}.txt"
+        echo "a${YEAR}"
     else
         # B-season continues into next year
         if [ "$MONTH" -ge 10 ]; then
-            echo "sked-b${YEAR}.txt"
+            echo "b${YEAR}"
         else
             # January-February use previous year's B schedule
             YEAR=$((YEAR - 1))
-            echo "sked-b${YEAR}.txt"
+            echo "b${YEAR}"
         fi
     fi
 }
@@ -29,9 +29,10 @@ get_current_season() {
 need_update() {
     local CURRENT_SEASON=$(get_current_season)
     local SCHEDULE_FILE="bc-time.txt"
+    local FREQ_FILE="bc-freq.txt"
     
     # If schedule file doesn't exist, we need to download
-    if [ ! -f "$SCHEDULE_FILE" ]; then
+    if [ ! -f "$SCHEDULE_FILE" ] || [ ! -f "$FREQ_FILE" ]; then
         echo "true"
         return
     fi
@@ -55,47 +56,54 @@ need_update() {
 
 # Download the latest schedule
 download_schedule() {
-    local SCHEDULE_FILE=$(get_current_season)
-    local URL="https://www.eibispace.de/dx/$SCHEDULE_FILE"
-    local TEMP_FILE="new_schedule.txt.tmp"
+    local SEASON_ID=$(get_current_season)
+    local URL_TIME="http://eibispace.de/dx/bc-${SEASON_ID}.txt"
+    local URL_FREQ="http://eibispace.de/dx/freq-${SEASON_ID}.txt"
+    local TEMP_TIME="new_time_schedule.tmp"
+    local TEMP_FREQ="new_freq_schedule.tmp"
     
-    echo "📥 Downloading latest EiBi schedule: $SCHEDULE_FILE"
-    echo "   From: $URL"
+    echo "📥 Downloading latest EiBi schedule season: $SEASON_ID"
     
     # Download to temp file
     if command -v wget &> /dev/null; then
-        wget -q -O "$TEMP_FILE" "$URL"
+        wget -q --no-check-certificate -O "$TEMP_TIME" "$URL_TIME"
+        wget -q --no-check-certificate -O "$TEMP_FREQ" "$URL_FREQ"
     elif command -v curl &> /dev/null; then
-        curl -s -o "$TEMP_FILE" "$URL"
+        curl -s -k -o "$TEMP_TIME" "$URL_TIME"
+        curl -s -k -o "$TEMP_FREQ" "$URL_FREQ"
     else
         echo "❌ Neither wget nor curl found"
         return 1
     fi
     
-    if [ $? -ne 0 ]; then
+    if [ ! -s "$TEMP_TIME" ] || [ ! -s "$TEMP_FREQ" ]; then
         echo "❌ Download failed"
-        rm -f "$TEMP_FILE"
+        rm -f "$TEMP_TIME" "$TEMP_FREQ"
         return 1
     fi
     
     # Verify it's a valid schedule
-    if ! grep -q "Time(UTC)" "$TEMP_FILE"; then
+    if ! grep -q "Time(UTC)" "$TEMP_TIME"; then
         echo "❌ Downloaded file doesn't appear to be valid"
-        rm -f "$TEMP_FILE"
+        rm -f "$TEMP_TIME" "$TEMP_FREQ"
         return 1
     fi
     
-    # Add season marker to the file
-    echo "# Season: $SCHEDULE_FILE" > new_schedule.txt
-    cat "$TEMP_FILE" >> new_schedule.txt
-    rm -f "$TEMP_FILE"
+    # Add season marker to the files
+    echo "# Season: $SEASON_ID" > new_time_schedule.txt
+    cat "$TEMP_TIME" >> new_time_schedule.txt
+    
+    echo "# Season: $SEASON_ID" > new_freq_schedule.txt
+    cat "$TEMP_FREQ" >> new_freq_schedule.txt
+    
+    rm -f "$TEMP_TIME" "$TEMP_FREQ"
     
     # Count entries
-    local ENTRY_COUNT=$(grep -E "^[0-9]{4}\s+[0-9]{4}" new_schedule.txt | wc -l)
+    local ENTRY_COUNT=$(grep -a -E "^[0-9]{4}\s+[0-9]{4}" new_time_schedule.txt | wc -l)
     
     echo "✅ Downloaded successfully!"
     echo "   Entries: ~$ENTRY_COUNT broadcasts"
-    echo "   File: new_schedule.txt (will be applied automatically)"
+    echo "   Files: new_time_schedule.txt & new_freq_schedule.txt"
     
     return 0
 }
@@ -139,7 +147,7 @@ main() {
             echo "✅ Schedule is up to date ($(get_current_season))"
             
             if [ -f "bc-time.txt" ]; then
-                local ENTRY_COUNT=$(grep -E "^[0-9]{4}\s+[0-9]{4}" bc-time.txt | wc -l)
+                local ENTRY_COUNT=$(grep -a -E "^[0-9]{4}\s+[0-9]{4}" bc-time.txt | wc -l)
                 echo "   Current entries: ~$ENTRY_COUNT broadcasts"
             fi
         fi

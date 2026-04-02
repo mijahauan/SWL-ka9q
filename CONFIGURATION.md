@@ -22,6 +22,9 @@ The easiest way to configure SWL-ka9q is to use the interactive startup script:
 npm start
 ```
 
+> [!NOTE]
+> The server automatically provisions a local self-signed HTTPS certificate (`cert.pem`, `key.pem`) to securely serve the app over `https://localhost:3100`. A Secure Context is strictly required for the browser to run native Opus audio decoding (WebCodecs).
+
 **On first run**, you'll be prompted to enter the radiod hostname:
 - For local radiod: enter `localhost` (or just press Enter for default)
 - For remote radiod: enter the hostname or IP address (e.g., `bee1-hf-status.local` or `192.168.1.100`)
@@ -203,7 +206,7 @@ SWL-ka9q uses a new channel request paradigm:
 - **Single RTP destination** - all SWL channels stream to `SWL_RTP_DESTINATION`
 - **Search by frequency** - existing channels are found by frequency, not SSRC
 - **Default preset: `am`** - optimized for shortwave broadcast listening
-- **Default sample rate: `12000`** - sufficient for AM broadcast audio
+- **Default encoding: Opus (`3`)** - heavily compressed and efficient audio transport
 
 This simplifies channel management and allows radiod to optimize SSRC allocation.
 

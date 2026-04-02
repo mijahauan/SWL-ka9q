@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.6.1] - 2026-04-02
+
+### Changed - Schedule Auto-Updater and Repository Refactor
+
+- 🔄 **Dynamic Schedule Ingestion**: The node server processes dual payload deployments simultaneously (both UTC broadcast times and corresponding frequency lists), executing zero-downtime hot-swaps of database arrays instead of requiring daemon interruptions.
+- 📡 **EiBi Security Workaround**: Fixed an unhandled regression in `auto-update-schedule.sh` where strict HTTPS parsing checks on `eibispace.de`'s 2019 expired certificates caused the pipeline to drop the fetches. Explicitly disabled TLS cert verification for fetches on this specific domain.
+- 🧹 **Repository Spring Cleaning**: Moved diagnostic scripts (`debug_radiod_status.py`, etc.) into `scripts/diagnostic/` and pushed unused legacy C control protocols into `docs/archive/` to keep the root path strictly constrained to active development files.
+- 📖 **Documentation Overhaul**: Completely rewrote `README.md`, `INSTALL.md`, `CONFIGURATION.md`, and `SCHEDULE_UPDATE.md` to cleanly describe natively supported macOS IP detection features, Auto-HTTPS/Opus capability, and the new auto-updating routines.
+
 ## [3.6.0] - 2026-04-02
 
 ### Added - Network Transport & HTTPS Support

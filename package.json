@@ -1,6 +1,6 @@
 {
   "name": "broadcast-station-monitor",
-  "version": "3.6.0",
+  "version": "3.6.1",
   "description": "Web-based shortwave broadcast station monitor with live audio streaming via ka9q-radio",
   "main": "server.js",
   "type": "module",

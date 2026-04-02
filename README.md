@@ -16,8 +16,9 @@ A web-based interface for monitoring shortwave broadcast stations with live audi
 
 🎧 **Live Audio Streaming**
 - One-click toggle to listen to any active station
-- WebSocket-based PCM audio streaming from ka9q-radio RTP multicast
-- Server-side RTP parsing with PCM extraction and byte-swapping
+- High-efficiency **Opus** audio transport (via WebCodecs API) falling back to PCM for legacy clients
+- WebSocket-based streaming from ka9q-radio RTP multicast
+- Server-side RTP parsing with automated HTTPS provisioning for Secure Context support
 - Web Audio API for seamless browser-based playback at 12 kHz mono
 - Supports multiple simultaneous streams
 
@@ -94,8 +95,9 @@ A web-based interface for monitoring shortwave broadcast stations with live audi
 
 ### Notes
 
-- ✅ **No external executables required**: The ka9q-python package now uses native Python channel discovery. The `control` executable from ka9q-radio is no longer needed.
-- ✅ **Cross-platform compatible**: Works on macOS, Linux, and Windows with zero external dependencies beyond Python itself.
+- ✅ **No external executables required**: The ka9q-python package uses native Python channel discovery.
+- ✅ **Cross-platform compatible**: Fully supports macOS (native IP discovery), Linux, and Windows with zero external dependencies beyond Python itself.
+- ✅ **Automated Security**: The server automatically generates a self-signed SSL cert (`cert.pem`, `key.pem`) on startup to ensure your browser grants Secure Context access for high-performance WebCodecs functionality.
 
 ## Installation
 

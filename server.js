@@ -29,7 +29,8 @@ const PORT = process.env.PORT || 3100;
 // Configuration
 const TIME_SCHEDULE_FILE = path.join(__dirname, 'bc-time.txt');
 const FREQ_SCHEDULE_FILE = path.join(__dirname, 'bc-freq.txt');
-const NEW_SCHEDULE_FILE = path.join(__dirname, 'new_schedule.txt');
+const NEW_TIME_SCHEDULE_FILE = path.join(__dirname, 'new_time_schedule.txt');
+const NEW_FREQ_SCHEDULE_FILE = path.join(__dirname, 'new_freq_schedule.txt');
 const RADIOD_CONFIG_FILE = path.join(__dirname, '.radiod-hostname');
 const KA9Q_STATUS_MULTICAST = '239.192.152.141';
 const KA9Q_STATUS_PORT = 5006;
@@ -1137,21 +1138,27 @@ async function downloadScheduleIfMissing() {
  */
 function checkAndUpdateSchedule() {
   try {
-    if (fs.existsSync(NEW_SCHEDULE_FILE)) {
-      console.log('🔄 New schedule file detected: new_schedule.txt');
+    if (fs.existsSync(NEW_TIME_SCHEDULE_FILE) && fs.existsSync(NEW_FREQ_SCHEDULE_FILE)) {
+      console.log('🔄 New schedule files detected: new_time_schedule.txt & new_freq_schedule.txt');
 
-      // Backup current schedule
-      const backupFile = path.join(__dirname, `bc-time.backup.${Date.now()}.txt`);
-      fs.copyFileSync(TIME_SCHEDULE_FILE, backupFile);
-      console.log(`💾 Backed up current schedule to ${path.basename(backupFile)}`);
+      // Backup current schedules
+      const backupTime = path.join(__dirname, `bc-time.backup.${Date.now()}.txt`);
+      const backupFreq = path.join(__dirname, `bc-freq.backup.${Date.now()}.txt`);
+      
+      if (fs.existsSync(TIME_SCHEDULE_FILE)) fs.copyFileSync(TIME_SCHEDULE_FILE, backupTime);
+      if (fs.existsSync(FREQ_SCHEDULE_FILE)) fs.copyFileSync(FREQ_SCHEDULE_FILE, backupFreq);
+      
+      console.log(`💾 Backed up current schedules`);
 
-      // Replace with new schedule
-      fs.copyFileSync(NEW_SCHEDULE_FILE, TIME_SCHEDULE_FILE);
-      console.log('✅ Updated bc-time.txt with new schedule');
+      // Replace with new schedules
+      fs.copyFileSync(NEW_TIME_SCHEDULE_FILE, TIME_SCHEDULE_FILE);
+      fs.copyFileSync(NEW_FREQ_SCHEDULE_FILE, FREQ_SCHEDULE_FILE);
+      console.log('✅ Updated bc-time.txt & bc-freq.txt with new schedules');
 
-      // Remove new_schedule.txt
-      fs.unlinkSync(NEW_SCHEDULE_FILE);
-      console.log('🗑️  Removed new_schedule.txt');
+      // Remove new_ schedule files
+      fs.unlinkSync(NEW_TIME_SCHEDULE_FILE);
+      fs.unlinkSync(NEW_FREQ_SCHEDULE_FILE);
+      console.log('🗑️  Removed temporary download files');
 
       return true;
     }
