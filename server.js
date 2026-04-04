@@ -1452,6 +1452,14 @@ app.delete('/api/audio/stream/:ssrc', (req, res) => {
   res.json({ success: true, message: 'Stream stopped' });
 });
 
+// Beacon-friendly close endpoint (POST for navigator.sendBeacon on page unload)
+app.post('/api/audio/stream/:ssrc/close', (req, res) => {
+  const ssrc = parseInt(req.params.ssrc);
+  console.log(`📡 Beacon close request for SSRC ${ssrc}`);
+  radioProxy.stopAudioStream(ssrc);
+  res.status(204).end();
+});
+
 // Tuning endpoints
 app.post('/api/audio/tune/:ssrc/agc', async (req, res) => {
   try {
@@ -1689,12 +1697,16 @@ async function startServer() {
       }
       // Don't delete session immediately - allow reconnection
       // Delete after a timeout to allow browser to reconnect
-      setTimeout(() => {
+      setTimeout(async () => {
         if (global.audioSessions.has(ssrc)) {
           const currentSession = global.audioSessions.get(ssrc);
           if (currentSession === session) {
             global.audioSessions.delete(ssrc);
-            console.log(`🗑️  Session cleaned up for SSRC ${ssrc}`);
+            // Tell radiod to close the receiver (set frequency to 0)
+            // This prevents orphaned channels from accumulating in radiod
+            const streamKey = Number(ssrc);
+            console.log(`🗑️  Session expired for SSRC ${ssrc}, removing radiod channel...`);
+            await radioProxy.stopAudioStream(streamKey);
           }
         }
       }, 5000); // 5 second grace period for reconnection

@@ -1,0 +1,453 @@
+#!/bin/bash
+#
+# swl — Single launcher for SWL-ka9q
+#
+# Usage:
+#   ./swl                                  Start normally (uses saved config)
+#   ./swl --status-host bee1-status.local  Set/change radiod host
+#   ./swl stop                             Stop a running instance
+#   ./swl status                           Show running status
+#   ./swl --no-browser                     Start without opening browser
+#   ./swl --help                           Show help
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+PID_FILE="$SCRIPT_DIR/.swl.pid"
+LOG_FILE="$SCRIPT_DIR/swl.log"
+CONFIG_FILE="$SCRIPT_DIR/.radiod-hostname"
+MULTICAST_FILE="$SCRIPT_DIR/.radiod-multicast"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+# Defaults
+OPEN_BROWSER=true
+PORT="${PORT:-3100}"
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+command_exists() { command -v "$1" >/dev/null 2>&1; }
+
+version_ge() {
+    [ "$(printf '%s\n' "$2" "$1" | sort -V | head -n1)" = "$2" ]
+}
+
+open_url() {
+    local url="$1"
+    if command_exists xdg-open; then
+        xdg-open "$url" 2>/dev/null &
+    elif command_exists open; then
+        open "$url" 2>/dev/null &
+    fi
+}
+
+get_pid() {
+    [ -f "$PID_FILE" ] && cat "$PID_FILE" || echo ""
+}
+
+is_running() {
+    local pid=$(get_pid)
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
+# ── Parse arguments ──────────────────────────────────────────────────────────
+
+CMD=""
+STATUS_HOST=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --status-host)
+            STATUS_HOST="$2"
+            shift 2
+            ;;
+        --no-browser)
+            OPEN_BROWSER=false
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: ./swl [options] [command]"
+            echo ""
+            echo "Commands:"
+            echo "  (none)     Start SWL-ka9q (default)"
+            echo "  stop       Stop a running instance"
+            echo "  restart    Restart the server"
+            echo "  status     Show server status"
+            echo ""
+            echo "Options:"
+            echo "  --status-host HOST   Set radiod status stream hostname"
+            echo "  --no-browser         Don't open browser on startup"
+            echo "  --help               Show this help"
+            echo ""
+            echo "Examples:"
+            echo "  ./swl                                  # normal start"
+            echo "  ./swl --status-host bee1-status.local  # first run"
+            echo "  ./swl stop                             # stop server"
+            exit 0
+            ;;
+        stop|restart|status)
+            CMD="$1"
+            shift
+            ;;
+        *)
+            echo -e "${RED}Unknown option: $1${NC}"
+            echo "Run './swl --help' for usage"
+            exit 1
+            ;;
+    esac
+done
+
+# ── Stop / Status / Restart commands ─────────────────────────────────────────
+
+do_stop() {
+    if ! is_running; then
+        echo -e "${YELLOW}SWL-ka9q is not running${NC}"
+        rm -f "$PID_FILE"
+        return 0
+    fi
+
+    local pid=$(get_pid)
+    echo -e "${BOLD}Stopping SWL-ka9q (PID: $pid)...${NC}"
+    kill "$pid" 2>/dev/null
+
+    local count=0
+    while is_running && [ $count -lt 10 ]; do
+        sleep 1
+        count=$((count + 1))
+    done
+
+    if is_running; then
+        kill -9 "$pid" 2>/dev/null
+        sleep 1
+    fi
+
+    rm -f "$PID_FILE"
+    echo -e "${GREEN}Stopped.${NC}"
+}
+
+do_status() {
+    if is_running; then
+        local pid=$(get_pid)
+        echo -e "${GREEN}SWL-ka9q is running (PID: $pid)${NC}"
+        echo "  URL: https://localhost:$PORT/"
+        if [ -f "$CONFIG_FILE" ]; then
+            echo "  Radiod: $(cat "$CONFIG_FILE")"
+        fi
+        if [ -f "$LOG_FILE" ]; then
+            echo ""
+            echo "Recent log:"
+            tail -5 "$LOG_FILE"
+        fi
+    else
+        echo -e "${YELLOW}SWL-ka9q is not running${NC}"
+        rm -f "$PID_FILE"
+        return 1
+    fi
+}
+
+case "$CMD" in
+    stop)    do_stop; exit $? ;;
+    restart) do_stop; sleep 1 ;;  # fall through to startup below
+    status)  do_status; exit $? ;;
+esac
+
+# ── Startup sequence ─────────────────────────────────────────────────────────
+
+# Bail if already running
+if is_running; then
+    local_pid=$(get_pid)
+    echo -e "${YELLOW}SWL-ka9q is already running (PID: $local_pid)${NC}"
+    echo "  URL: https://localhost:$PORT/"
+    echo ""
+    echo "Run './swl restart' to restart, or './swl stop' to stop."
+    exit 0
+fi
+
+echo -e "${BLUE}${BOLD}SWL-ka9q${NC}"
+echo ""
+
+# ── Step 1: Check for code updates ──────────────────────────────────────────
+
+LOCAL_VERSION=$(node -e "console.log(require('./package.json').version)" 2>/dev/null || echo "unknown")
+
+echo -e "${BOLD}[1/4] Checking for updates...${NC} (current: v$LOCAL_VERSION)"
+
+# Fetch latest tag from remote (quick, non-destructive)
+if git fetch --tags --quiet 2>/dev/null; then
+    LATEST_TAG=$(git tag -l 'v*' | sort -V | tail -1)
+    if [ -n "$LATEST_TAG" ] && [ "$LATEST_TAG" != "v$LOCAL_VERSION" ]; then
+        # Check if remote tag is actually newer
+        if version_ge "${LATEST_TAG#v}" "$LOCAL_VERSION" && [ "${LATEST_TAG#v}" != "$LOCAL_VERSION" ]; then
+            echo -e "  ${YELLOW}Update available: $LATEST_TAG (you have v$LOCAL_VERSION)${NC}"
+            read -p "  Install update? [Y/n] " -n 1 -r
+            echo ""
+            if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                echo "  Updating..."
+                git checkout "$LATEST_TAG" 2>/dev/null || git pull --ff-only 2>/dev/null
+                npm install --silent 2>/dev/null
+                # Rebuild venv if needed
+                if [ -d "venv" ]; then
+                    source venv/bin/activate
+                    pip install --upgrade ka9q-python --quiet 2>/dev/null
+                    deactivate
+                fi
+                LOCAL_VERSION=$(node -e "console.log(require('./package.json').version)" 2>/dev/null)
+                echo -e "  ${GREEN}Updated to v$LOCAL_VERSION${NC}"
+            fi
+        else
+            echo -e "  ${GREEN}Up to date.${NC}"
+        fi
+    else
+        echo -e "  ${GREEN}Up to date.${NC}"
+    fi
+else
+    echo -e "  ${YELLOW}Could not check (offline?). Continuing with v$LOCAL_VERSION.${NC}"
+fi
+
+echo ""
+
+# ── Step 2: Check/update EiBi schedule ───────────────────────────────────────
+
+echo -e "${BOLD}[2/4] Checking EiBi broadcast schedule...${NC}"
+
+get_current_season() {
+    local YEAR=$(date +%y)
+    local MONTH=$(date +%-m)
+    if [ "$MONTH" -ge 3 ] && [ "$MONTH" -lt 10 ]; then
+        echo "a${YEAR}"
+    else
+        if [ "$MONTH" -ge 10 ]; then
+            echo "b${YEAR}"
+        else
+            YEAR=$((YEAR - 1))
+            echo "b${YEAR}"
+        fi
+    fi
+}
+
+SEASON=$(get_current_season)
+NEED_SCHEDULE=false
+
+if [ ! -f "bc-time.txt" ] || [ ! -f "bc-freq.txt" ]; then
+    NEED_SCHEDULE=true
+    echo -e "  Schedule files missing. Downloading season $SEASON..."
+else
+    # Check file age — update if older than 14 days
+    FILE_AGE=$(($(date +%s) - $(stat -c %Y "bc-time.txt" 2>/dev/null || stat -f %m "bc-time.txt" 2>/dev/null || echo 0)))
+    DAYS_OLD=$((FILE_AGE / 86400))
+    if [ $DAYS_OLD -gt 14 ]; then
+        NEED_SCHEDULE=true
+        echo -e "  Schedule is $DAYS_OLD days old. Checking for updates..."
+    fi
+fi
+
+if [ "$NEED_SCHEDULE" = true ]; then
+    URL_TIME="http://eibispace.de/dx/bc-${SEASON}.txt"
+    URL_FREQ="http://eibispace.de/dx/freq-${SEASON}.txt"
+    TEMP_TIME=$(mktemp)
+    TEMP_FREQ=$(mktemp)
+
+    DL_OK=true
+    if command_exists curl; then
+        curl -s -k -o "$TEMP_TIME" "$URL_TIME" && curl -s -k -o "$TEMP_FREQ" "$URL_FREQ" || DL_OK=false
+    elif command_exists wget; then
+        wget -q --no-check-certificate -O "$TEMP_TIME" "$URL_TIME" && wget -q --no-check-certificate -O "$TEMP_FREQ" "$URL_FREQ" || DL_OK=false
+    else
+        DL_OK=false
+    fi
+
+    if [ "$DL_OK" = true ] && [ -s "$TEMP_TIME" ] && grep -q "Time(UTC)" "$TEMP_TIME" 2>/dev/null; then
+        # Backup existing files
+        [ -f "bc-time.txt" ] && cp "bc-time.txt" "bc-time.backup.$(date +%s).txt"
+        [ -f "bc-freq.txt" ] && cp "bc-freq.txt" "bc-freq.backup.$(date +%s).txt"
+        mv "$TEMP_TIME" "bc-time.txt"
+        mv "$TEMP_FREQ" "bc-freq.txt"
+        ENTRY_COUNT=$(grep -a -c -E "^[0-9]{4}" "bc-time.txt" || echo "?")
+        echo -e "  ${GREEN}Downloaded season $SEASON ($ENTRY_COUNT entries).${NC}"
+    else
+        rm -f "$TEMP_TIME" "$TEMP_FREQ"
+        if [ -f "bc-time.txt" ]; then
+            echo -e "  ${YELLOW}Download failed. Using existing schedule.${NC}"
+        else
+            echo -e "  ${YELLOW}Download failed. Server will retry on startup.${NC}"
+        fi
+    fi
+else
+    ENTRY_COUNT=$(grep -a -c -E "^[0-9]{4}" "bc-time.txt" 2>/dev/null || echo "?")
+    echo -e "  ${GREEN}Schedule is current (season $SEASON, $ENTRY_COUNT entries).${NC}"
+fi
+
+echo ""
+
+# ── Step 3: Bootstrap dependencies if needed ─────────────────────────────────
+
+echo -e "${BOLD}[3/4] Checking dependencies...${NC}"
+
+NEED_BOOTSTRAP=false
+
+# Node modules
+if [ ! -d "node_modules" ]; then
+    NEED_BOOTSTRAP=true
+    echo "  Installing Node.js packages..."
+    npm install --silent 2>&1 | tail -1
+    echo -e "  ${GREEN}Node.js packages installed.${NC}"
+else
+    echo -e "  ${GREEN}Node.js packages OK.${NC}"
+fi
+
+# Python venv
+if [ ! -d "venv" ] || [ ! -f "venv/bin/python3" ]; then
+    NEED_BOOTSTRAP=true
+    echo "  Creating Python virtual environment..."
+
+    # Check prerequisites
+    if ! command_exists python3; then
+        echo -e "  ${RED}Python 3 not found. Install it first:${NC}"
+        echo "    Ubuntu/Debian: sudo apt install python3 python3-venv"
+        echo "    macOS: brew install python3"
+        exit 1
+    fi
+
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install --upgrade pip --quiet 2>/dev/null
+    pip install "ka9q-python>=2.2,<3.0" --quiet 2>/dev/null
+    deactivate
+    echo -e "  ${GREEN}Python environment ready.${NC}"
+else
+    echo -e "  ${GREEN}Python environment OK.${NC}"
+fi
+
+# SSL certificate
+if [ ! -f "key.pem" ] || [ ! -f "cert.pem" ]; then
+    echo "  Generating SSL certificate..."
+    openssl req -nodes -new -x509 -keyout key.pem -out cert.pem -days 3650 \
+        -subj "/C=US/ST=State/L=City/O=SWL/CN=localhost" 2>/dev/null
+    echo -e "  ${GREEN}SSL certificate generated.${NC}"
+fi
+
+echo ""
+
+# ── Step 4: Configure radiod and start server ────────────────────────────────
+
+echo -e "${BOLD}[4/4] Starting server...${NC}"
+
+# Determine radiod hostname
+if [ -n "$STATUS_HOST" ]; then
+    # Validate format
+    if [[ ! "$STATUS_HOST" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+        echo -e "${RED}Invalid hostname format. Use alphanumeric, dots, dashes only.${NC}"
+        exit 1
+    fi
+    RADIOD_HOSTNAME="$STATUS_HOST"
+    echo "$RADIOD_HOSTNAME" > "$CONFIG_FILE"
+    echo -e "  Saved radiod host: $RADIOD_HOSTNAME"
+elif [ -f "$CONFIG_FILE" ]; then
+    RADIOD_HOSTNAME=$(cat "$CONFIG_FILE")
+    echo -e "  Radiod host: $RADIOD_HOSTNAME"
+else
+    # First run without --status-host
+    echo -e "${YELLOW}No radiod host configured.${NC}"
+    echo ""
+    echo "Provide the radiod status stream address:"
+    echo "  Example: bee1-status.local"
+    echo ""
+    read -p "  Hostname: " RADIOD_HOSTNAME
+
+    if [ -z "$RADIOD_HOSTNAME" ]; then
+        echo -e "${RED}No hostname provided. Use: ./swl --status-host <hostname>${NC}"
+        exit 1
+    fi
+    if [[ ! "$RADIOD_HOSTNAME" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+        echo -e "${RED}Invalid hostname format.${NC}"
+        exit 1
+    fi
+    echo "$RADIOD_HOSTNAME" > "$CONFIG_FILE"
+fi
+
+export RADIOD_HOSTNAME
+
+# Load saved multicast config if present
+if [ -f "$MULTICAST_FILE" ]; then
+    export RADIOD_AUDIO_MULTICAST=$(cat "$MULTICAST_FILE")
+fi
+
+# Detect network interface for multicast
+if [ -z "$KA9Q_MULTICAST_INTERFACE" ]; then
+    if command_exists ip; then
+        DEFAULT_IFACE=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'dev \K\S+' | head -1)
+        [ -n "$DEFAULT_IFACE" ] && KA9Q_MULTICAST_INTERFACE=$(ip addr show "$DEFAULT_IFACE" 2>/dev/null | grep -oP 'inet \K[\d.]+' | head -1)
+    elif command_exists route; then
+        DEFAULT_IFACE=$(route -n get default 2>/dev/null | grep interface | awk '{print $2}')
+        [ -n "$DEFAULT_IFACE" ] && KA9Q_MULTICAST_INTERFACE=$(ifconfig "$DEFAULT_IFACE" 2>/dev/null | awk '$1 == "inet" {print $2}' | head -1)
+    fi
+fi
+export KA9Q_MULTICAST_INTERFACE
+
+# Test connection (quick, non-blocking)
+if venv/bin/python3 -c "from ka9q import RadiodControl; RadiodControl('${RADIOD_HOSTNAME}')" 2>/dev/null; then
+    echo -e "  ${GREEN}Connected to radiod.${NC}"
+else
+    echo -e "  ${YELLOW}Could not reach radiod at $RADIOD_HOSTNAME (will retry at runtime).${NC}"
+fi
+
+# Discover multicast for remote radiod (first run only)
+if [ "$RADIOD_HOSTNAME" != "localhost" ] && [ "$RADIOD_HOSTNAME" != "127.0.0.1" ] && [ -z "$RADIOD_AUDIO_MULTICAST" ]; then
+    if [ -f "discover_multicast.py" ]; then
+        DISCOVERY=$(venv/bin/python3 discover_multicast.py --radiod-host "$RADIOD_HOSTNAME" --duration 2 2>/dev/null)
+        if [ $? -eq 0 ] && [ -n "$DISCOVERY" ]; then
+            FIRST_ADDR=$(echo "$DISCOVERY" | venv/bin/python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    if d.get('success') and d.get('addresses'):
+        print(d['addresses'][0])
+except: pass
+" 2>/dev/null)
+            if [ -n "$FIRST_ADDR" ]; then
+                export RADIOD_AUDIO_MULTICAST="$FIRST_ADDR"
+                echo "$FIRST_ADDR" > "$MULTICAST_FILE"
+                echo -e "  Multicast: $FIRST_ADDR"
+            fi
+        fi
+    fi
+fi
+
+echo ""
+
+# Start server in background
+nohup node server.js >> "$LOG_FILE" 2>&1 &
+SERVER_PID=$!
+echo $SERVER_PID > "$PID_FILE"
+
+# Wait for server to be ready
+sleep 2
+if ! kill -0 $SERVER_PID 2>/dev/null; then
+    echo -e "${RED}Server failed to start. Check $LOG_FILE${NC}"
+    rm -f "$PID_FILE"
+    exit 1
+fi
+
+SERVER_URL="https://localhost:$PORT/"
+
+echo -e "${GREEN}${BOLD}SWL-ka9q is running${NC}"
+echo -e "  URL:    $SERVER_URL"
+echo -e "  PID:    $SERVER_PID"
+echo -e "  Log:    $LOG_FILE"
+echo -e "  Radiod: $RADIOD_HOSTNAME"
+echo ""
+echo -e "Run ${BOLD}./swl stop${NC} to stop."
+
+# Open browser
+if [ "$OPEN_BROWSER" = true ]; then
+    open_url "$SERVER_URL"
+fi

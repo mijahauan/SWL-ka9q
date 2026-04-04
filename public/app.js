@@ -1141,11 +1141,13 @@ async function toggleAudio(frequency) {
 }
 
 /**
- * Stop all audio sessions
+ * Stop all audio sessions and tell the server to close radiod channels
  */
 function stopAllAudio() {
     for (const [frequency, session] of activeAudioSessions) {
         session.stop();
+        // Tell server to close the radiod channel
+        fetch(`/api/audio/stream/${session.ssrc}`, { method: 'DELETE' }).catch(() => {});
     }
     activeAudioSessions.clear();
 
@@ -1843,7 +1845,12 @@ if (document.readyState === 'loading') {
     init();
 }
 
-// Cleanup on page unload
+// Cleanup on page unload — use sendBeacon for reliable delivery
 window.addEventListener('beforeunload', () => {
-    stopAllAudio();
+    for (const [frequency, session] of activeAudioSessions) {
+        // sendBeacon survives page unload; fetch/DELETE does not
+        navigator.sendBeacon(`/api/audio/stream/${session.ssrc}/close`, '');
+        session.stop();
+    }
+    activeAudioSessions.clear();
 });
